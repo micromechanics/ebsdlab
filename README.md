@@ -45,7 +45,7 @@ corresponding pole-figure
  - help with cleaning and grain identification
 
 
-# Get and build docummentation
+# Install py_ebsd package and build docummentation
 Clone data from github
 
 ```console 
@@ -58,6 +58,13 @@ $ cd pythonEBSD
 $ conda env create -f environment.yml
 $ python -m pip install .
 ```
+After that, the package can be imported and used in Python codes as
+
+```python
+>>> import py_ebsd
+>>> emap = py_ebsd.EBSD("Examples/EBSD.ang")
+>>> emap.plot(e.CI)
+```
 
 Build documentation and tutorials
 
@@ -65,4 +72,4 @@ Build documentation and tutorials
 $ cd docs
 $ python verifyAll.py
 ```
-then open docs/docs/index.html in webbrowser
+then open docs/docs/index.html in webbrowser to see further guidelines and tutorials on the py_ebsd package.
