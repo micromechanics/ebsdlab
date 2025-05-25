@@ -19,10 +19,10 @@ I look for more contributors, see below
 
 
 EBSD-Inverse Pole Figure (IPF) of polycrystalline Copper
-![EBSD of polycrystalline Copper](HTMLInput/ebsd_py_ND.png)
+![EBSD of polycrystalline Copper](docs/HTMLInputStatic/ebsd_py_ND.png)
 
 corresponding pole-figure
-![Pole figure](HTMLInput/ebsd_py_PF100.png)
+![Pole figure](docs/HTMLInputStatic/ebsd_py_PF100.png)
 
 
 # Documentation
@@ -47,12 +47,22 @@ corresponding pole-figure
 
 # Get and build docummentation
 Clone data from github
-```bash
-git clone https://github.com/SteffenBrinckmann/pythonEBSD.git
+
+```console 
+$ git clone https://github.com/micromechanics/pythonEBSD.git ./pythonEBSD
+```
+Create conda environment and install py_ebsd package
+
+```console
+$ cd pythonEBSD
+$ conda env create -f environment.yml
+$ python -m pip install .
 ```
 
 Build documentation and tutorials
-```bash
-python verifyAll.py
+
+```console
+$ cd docs
+$ python verifyAll.py
 ```
-then open docs/index.html in webbrowser
+then open docs/docs/index.html in webbrowser
