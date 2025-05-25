@@ -1,0 +1,13 @@
+name: py_ebsd
+channels:
+  - conda-forge
+dependencies:
+  - numpy
+  - matplotlib
+  - scipy
+  - scikit-learn
+  - pytest
+  - jupyter
+  - jupyterlab
+  - ipympl
+  - doxygen
