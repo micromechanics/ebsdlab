@@ -9,7 +9,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-from ebsd_Quaternion import Quaternion
+from py_ebsd.ebsd_Quaternion import Quaternion
 
 ##
 #  Material symmetry class; this class only stores lattice: cubic, hexagonal

@@ -13,9 +13,9 @@ from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib import mlab, colors
-from ebsd_Orientation import Orientation
-from ebsd_Symmetry import Symmetry
-from ebsd_Quaternion import Quaternion
+from py_ebsd.ebsd_Orientation import Orientation
+from py_ebsd.ebsd_Symmetry import Symmetry
+from py_ebsd.ebsd_Quaternion import Quaternion
 
 
 class EBSD:
@@ -118,23 +118,23 @@ class EBSD:
           keyValues[index] = value
           break
     meta = dict(list(zip(keys,keyValues)))
-    if meta['Symmetry'] == 43:
+    if meta['Symmetry'] == 43 or self.meta['Symmetry'] == 'm-3m':
       self.sym.append( Symmetry('cubic'))
     else:
       print("ERROR: no symmetry found")
       return
     # read data: print "Reading file, this can take a bit..."
     data = np.loadtxt(fileHandle)
-    self.phi1      = data[:,0].astype(np.float)
-    self.PHI       = data[:,1].astype(np.float)
-    self.phi2      = data[:,2].astype(np.float)
-    self.x         = data[:,3].astype(np.float)
-    self.y         = data[:,4].astype(np.float)
-    self.IQ        = data[:,5].astype(np.float)
-    self.CI        = data[:,6].astype(np.float)
+    self.phi1      = data[:,0].astype(float)
+    self.PHI       = data[:,1].astype(float)
+    self.phi2      = data[:,2].astype(float)
+    self.x         = data[:,3].astype(float)
+    self.y         = data[:,4].astype(float)
+    self.IQ        = data[:,5].astype(float)
+    self.CI        = data[:,6].astype(float)
     self.phaseID   = data[:,7].astype(np.uint8)
     self.SEMsignal = data[:,8].astype(np.uint8)
-    self.fit       = data[:,9].astype(np.float)
+    self.fit       = data[:,9].astype(float)
     self.width     = max(self.x)
     self.height    = max(self.y)
     self.ratio     = self.width/self.height
@@ -188,8 +188,8 @@ class EBSD:
       or subdivide into half, of half of half
       """
       for i in range(data.shape[0]):
-        x    = data[i,foundKeys["x,"]   - 1].astype(np.float32)
-        y    = data[i,foundKeys["x,"]   - 0].astype(np.float32)
+        x    = data[i,foundKeys["x,"]   - 1].astype(float)
+        y    = data[i,foundKeys["x,"]   - 0].astype(float)
         # identify index: nice and much much slowes
         idx = np.argmax(np.logical_and(np.abs(self.x-x)<self.stepSizeX/10.0, \
                                        np.abs(self.y-y)<self.stepSizeX/10.0))     #very save error of 10th of STEPSIZE
@@ -216,8 +216,8 @@ class EBSD:
       self.phi1 = data[:,foundKeys["phi1,"] - 1].astype(np.float16)
       self.PHI  = data[:,foundKeys["phi1,"] - 0].astype(np.float16)
       self.phi2 = data[:,foundKeys["phi1,"] + 1].astype(np.float16)
-      self.x    = data[:,foundKeys["x,"]   - 1].astype(np.float32)
-      self.y    = data[:,foundKeys["x,"]   - 0].astype(np.float32)
+      self.x    = data[:,foundKeys["x,"]   - 1].astype(float)
+      self.y    = data[:,foundKeys["x,"]   - 0].astype(float)
       if "IQ" in foundKeys:
         self.IQ = data[:,foundKeys["IQ"] - 1].astype(np.float16)
       if "CI" in foundKeys:
@@ -304,15 +304,15 @@ class EBSD:
     dn = np.double( np.fromfile(f,dtype=np.uint32, count=1))
     if round(((dn/4-2)/10)/n) != 1:
       f.seek(startPos+8)
-    self.stepSizeX = np.double(np.fromfile(f, dtype=np.float32, count=1))
-    self.stepSizeY = np.double(np.fromfile(f, dtype=np.float32, count=1))
+    self.stepSizeX = np.double(np.fromfile(f, dtype=float, count=1))
+    self.stepSizeY = np.double(np.fromfile(f, dtype=float, count=1))
 
-    data = np.reshape( np.double(np.fromfile(f, count=n*10, dtype=np.float32)) , (n,10) )
+    data = np.reshape( np.double(np.fromfile(f, count=n*10, dtype=float)) , (n,10) )
     self.phi1    = data[:,0].astype(np.float16)
     self.PHI     = data[:,1].astype(np.float16)
     self.phi2    = data[:,2].astype(np.float16)
-    self.x       = data[:,3].astype(np.float32)
-    self.y       = data[:,4].astype(np.float32)
+    self.x       = data[:,3].astype(float)
+    self.y       = data[:,4].astype(float)
     self.IQ      = data[:,5].astype(np.float16)
     self.CI      = data[:,6].astype(np.float16)
     self.phaseID = data[:,7].astype(np.float16)
@@ -412,7 +412,7 @@ class EBSD:
     crcFile = open(self.fileName,'rb')
     self.phaseID = np.zeros((numDataPoints),dtype=np.uint8)
     self.BC,self.BS,self.Bands,self.Error=np.zeros_like(self.phaseID),np.zeros_like(self.phaseID),np.zeros_like(self.phaseID),np.zeros_like(self.phaseID)
-    self.phi1    = np.zeros((numDataPoints),dtype=np.float)
+    self.phi1    = np.zeros((numDataPoints),dtype=float)
     self.PHI,self.phi2,self.CI,self.RI  =np.zeros_like(self.phi1),np.zeros_like(self.phi1),np.zeros_like(self.phi1),np.zeros_like(self.phi1)
     self.IQ, self.SEMsignal, self.fit   =np.zeros_like(self.phi1),np.zeros_like(self.phi1),np.zeros_like(self.phi1)
     for i in range(numDataPoints):
@@ -463,10 +463,10 @@ class EBSD:
     self.x, self.y = np.meshgrid(x_,x_)
     self.x, self.y = self.x.flatten(), self.y.flatten()
     self.phaseID = np.ones((numDataPoints),dtype=np.uint8)
-    self.phi1    = np.zeros((numDataPoints),dtype=np.float)+phi1 #+ np.random.normal(loc=0,scale=distrib,size=numDataPoints)
-    self.PHI     = np.zeros((numDataPoints),dtype=np.float)+PHI #+ np.random.normal(loc=0,scale=distrib,size=numDataPoints)
-    self.phi2    = np.zeros((numDataPoints),dtype=np.float)+phi2 #+ np.random.normal(loc=0,scale=distrib,size=numDataPoints)
-    self.CI      = np.ones((numDataPoints),dtype=np.float)
+    self.phi1    = np.zeros((numDataPoints),dtype=float)+phi1 #+ np.random.normal(loc=0,scale=distrib,size=numDataPoints)
+    self.PHI     = np.zeros((numDataPoints),dtype=float)+PHI #+ np.random.normal(loc=0,scale=distrib,size=numDataPoints)
+    self.phi2    = np.zeros((numDataPoints),dtype=float)+phi2 #+ np.random.normal(loc=0,scale=distrib,size=numDataPoints)
+    self.CI      = np.ones((numDataPoints),dtype=float)
     self.stepSizeY = self.stepSizeX
     self.width     = np.max(self.x)
     self.height    = np.max(self.y)
@@ -593,7 +593,7 @@ class EBSD:
     neighbors    = self.neighbors()
     fzThreshold  = math.sqrt(2.0)-1.0
     qConj        = self.quaternions.conjugated()
-    angles       = np.empty_like(neighbors, dtype=np.float)
+    angles       = np.empty_like(neighbors, dtype=float)
     neighborSymQ = sym.symmetryQuats()
     symQ         = neighborSymQ[0]
     for iNeighbor in range(6):
@@ -660,9 +660,9 @@ class EBSD:
     mask = griddata( points, ~self.mask[self.vMask], (x,y), interpolationType)
     # plot if/if-not the maximum and minimum are given
     if vmax!="" and vmin!="":
-      plt.imshow( np.ma.masked_where(mask, z.astype(np.float32)) , extent=[xMin,xMax, yMax,yMin], cmap=cmap, vmax=vmax, vmin=vmin, origin='upper')
+      plt.imshow( np.ma.masked_where(mask, z.astype(float)) , extent=[xMin,xMax, yMax,yMin], cmap=cmap, vmax=vmax, vmin=vmin, origin='upper')
     else:
-      plt.imshow( np.ma.masked_where(mask, z.astype(np.float32)) , extent=[xMin,xMax, yMax,yMin], cmap=cmap, origin='upper')
+      plt.imshow( np.ma.masked_where(mask, z.astype(float)) , extent=[xMin,xMax, yMax,yMin], cmap=cmap, origin='upper')
     if cbar:
       plt.colorbar()
     if self.doctest: plt.savefig('doctest.png'); plt.close(); return
@@ -671,7 +671,7 @@ class EBSD:
     if show:
       plt.show()
     z *= 255/np.max(z)
-    self.image  = Image.fromarray( z.astype(np.float32) )
+    self.image  = Image.fromarray( z.astype(float) )
     return
 
 
@@ -738,7 +738,7 @@ class EBSD:
       widthPixel = int(self.width/self.stepSizeX)
 
     flags = np.zeros( (len(self.x)), dtype=np.bool)
-    rgbs  = np.zeros( (3,len(self.x)), dtype=np.float)
+    rgbs  = np.zeros( (3,len(self.x)), dtype=float)
     for sym in self.sym:
       if sym.__repr__() == "None": continue
       equivQuaternions = sym.equivalentQuaternions( self.quaternions )
@@ -799,8 +799,8 @@ class EBSD:
     for sym in self.sym:
       if sym.__repr__() == None: continue
       for line in sym.unitCell():
-        start = iQuaternion*(np.array(line[:3],dtype=np.float)*scale)
-        end   = iQuaternion*(np.array(line[3:],dtype=np.float)*scale)
+        start = iQuaternion*(np.array(line[:3],dtype=float)*scale)
+        end   = iQuaternion*(np.array(line[3:],dtype=float)*scale)
         # use OIM coordinate system: up-left: new vector (-y, x, z)
         # use imshow with upper origin: second coordinate negative -> (-y, -x, z)
         start = np.array([-start[1], -start[0],  start[2]])
@@ -916,7 +916,7 @@ class EBSD:
     for sym in self.sym:
       if sym.__repr__() == None: continue
       oHelp = Orientation(Eulers=np.array([0.,0.,0.]), symmetry=sym.__repr__())
-      axis = np.array(axis, dtype=np.float)
+      axis = np.array(axis, dtype=float)
       axis /= np.linalg.norm(axis)
       mask = np.logical_and(self.mask, self.vMask)
       x, y = None, None

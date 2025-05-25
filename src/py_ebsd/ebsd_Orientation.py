@@ -7,8 +7,8 @@
 #
 import numpy as np
 import random
-from ebsd_Symmetry import Symmetry
-from ebsd_Quaternion import Quaternion
+from py_ebsd.ebsd_Symmetry import Symmetry
+from py_ebsd.ebsd_Quaternion import Quaternion
 
 
 class Orientation:
