@@ -38,6 +38,23 @@ class EBSD:
        fileName: file name in the present directory
     """
     # initialize
+    self.meta = None
+    self.phi1 = None
+    self.PHI = None
+    self.phi2 = None
+    self.y = None
+    self.IQ = None
+    self.width = None
+    self.CI = None
+    self.phaseID = None
+    self.SEMsignal = None
+    self.fit = None
+    self.height = None
+    self.height = None
+    self.ratio = None
+    self.x = None
+    self.stepSizeX = None
+    self.stepSizeY = None
     startTime = time.time()
     fontName = 'arial.ttf'
     self.fontFile = ""
@@ -117,8 +134,8 @@ class EBSD:
               pass
           keyValues[index] = value
           break
-    meta = dict(list(zip(keys,keyValues)))
-    if meta['Symmetry'] == 43 or self.meta['Symmetry'] == 'm-3m':
+    self.meta = dict(list(zip(keys,keyValues)))
+    if self.meta['Symmetry'] == 43 or self.meta['Symmetry'] == 'm-3m':
       self.sym.append( Symmetry('cubic'))
     else:
       print("ERROR: no symmetry found")
