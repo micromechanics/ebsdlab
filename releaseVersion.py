@@ -144,13 +144,13 @@ def newVersion(level: int = 2) -> None:
     os.system(
         f'git tag -a v{version} -m "Version {version}; see CHANGELOG for details"')
     # create CHANGELOG / Contributor-list
-    with open(Path.home()/'.ssh'/'github.token', encoding='utf-8') as fIn:
-        token = fIn.read().strip()
-    os.system(
-        f'github_changelog_generator -u PASTA-ELN -p pasta-eln -t {token}')
-    addition = input(
-        '\n\nWhat do you want to add to the push message (do not use \' or \")? ')
-    os.system(f'git commit -a -m "updated changelog; {addition}"')
+    # with open(Path.home()/'.ssh'/'github.token', encoding='utf-8') as fIn:
+    #     token = fIn.read().strip()
+    # os.system(
+    #     f'github_changelog_generator -u PASTA-ELN -p pasta-eln -t {token}')
+    # addition = input(
+    #     '\n\nWhat do you want to add to the push message (do not use \' or \")? ')
+    # os.system(f'git commit -a -m "updated changelog; {addition}"')
     # push and publish
     print('\n\nWill bypass rule violation\n\n')
     os.system('git push')
@@ -252,7 +252,7 @@ def runSourceVerification() -> None:
 if __name__ == '__main__':
     # run tests and create default files
     runTests()
-    createContributors()
+    # createContributors()
     runSourceVerification()
     createRequirementsFile()
     createCondaEnv()
