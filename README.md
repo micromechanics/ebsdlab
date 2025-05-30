@@ -24,7 +24,7 @@ EBSD-Inverse Pole Figure (IPF) of polycrystalline Copper with corresponding Pole
 </table>
 
 ## Documentation
-[Documentation on github pages](...)
+[Documentation on github pages](https://micromechanics.github.io/ebsdlab/)
 
 ## Installation
 You can install `ebsdlab` using Conda or pip.
