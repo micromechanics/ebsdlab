@@ -96,6 +96,7 @@ Compute the mean grain orientation for all points in the map.
 
 .. jupyter-execute::
 
+   import numpy as np
    from ebsdlab.orientation import Orientation
    from ebsdlab.ebsd import EBSD
    Orients = []
