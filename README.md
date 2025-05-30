@@ -12,7 +12,7 @@ Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in s
   - heavily tested for cubic
   - separate crystal orientation and plotting of it
   - some educational plotting
-  - examples and lots of docummentation
+  - examples and lots of documentation
 
 ## Example
 EBSD-Inverse Pole Figure (IPF) of polycrystalline Copper with corresponding Pole Figure
