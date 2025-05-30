@@ -116,7 +116,7 @@ How to run mTex
    >> import_wizard('ebsd')
    % and select EBSD.osc
    % select plotting convention 5: x-to-right; y-to-bottom
-   % select "convert Euler 2 Spacial Referecence Frame"
+   % select "convert Euler 2 Spatial Reference Frame"
    % save to workspace variable
    >> csCopper = ebsd('Cu').CS;
    >> plot(ebsd('Cu'),ebsd('Cu').orientations,'coordinates','on')

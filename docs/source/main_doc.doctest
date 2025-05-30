@@ -18,7 +18,7 @@ Steffen Brinckmann<br>
   - heavily tested for cubic
   - separate crystal orientation and plotting of it
   - some educational plotting
-  - examples and lots of docummentation via Doxygen
+  - examples and lots of documentation via Doxygen
   - doctest verifies functionality
   - introduce Kernel average misorientation
 

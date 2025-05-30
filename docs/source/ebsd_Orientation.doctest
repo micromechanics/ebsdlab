@@ -11,7 +11,7 @@ Note: "doctest: +SKIP" implies that the automatic test skips it
 \subsection exampleColors Example: check colors of certain orientations. Answers are given in RGB scale.
 Three examples are investigated:
 - [100] = red: 1,0,0
-- [110] = green: 0,1,0  (rotation by 45deg arount Phi)
+- [110] = green: 0,1,0  (rotation by 45deg around Phi)
 - [111] = blue: 0,0,1
 Each example creates an angle from 3 float values, creates an orientation and rounds the color to improve reabability.
 \verbatim
