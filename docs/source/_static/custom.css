@@ -1,0 +1,18 @@
+/* Increase font size for Jupyter Sphinx code input areas */
+.jp-InputArea-editor .CodeMirror-code,
+.jp-InputArea-editor .CodeMirror-line {
+    font-size: 120%; /* Or any other size like 1.1em, 14pt, etc. */
+}
+
+/* Increase font size for Jupyter Sphinx code output areas (text-based) */
+.jp-OutputArea-output pre {
+    font-size: 120%; /* Or any other size */
+}
+
+/* You might also want to target the general code blocks if needed */
+div.highlight pre, /* General Sphinx code blocks */
+.highlight .go, /* Jupyter output prompt */
+.highlight .gt /* Jupyter traceback */
+{
+    font-size: 120%;
+}

@@ -1,13 +1,8 @@
-name: py_ebsd
+name: python_ebsd
 channels:
   - conda-forge
 dependencies:
   - numpy
   - matplotlib
   - scipy
-  - scikit-learn
   - pytest
-  - jupyter
-  - jupyterlab
-  - ipympl
-  - doxygen

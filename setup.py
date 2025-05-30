@@ -28,7 +28,7 @@ setup(
         'Programming Language :: Python :: 3.12',
     ],
     description="Read, process and plot EBSD (electron backscatter diffraction) data",
-    install_requires=['numpy', 'matplotlib', 'scipy', 'scikit-learn', 'pytest'],
+    install_requires=['numpy', 'matplotlib', 'scipy'],
     license="GNU General Public License v3",
     long_description=readme,
     include_package_data=True,
@@ -38,7 +38,7 @@ setup(
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,
-    url='https://github.com/micromechanics/pythonEBSD.git',
+    url='https://github.com/micromechanics/ebsdlab.git',
     version='0.0.2',
     zip_safe=False,
 )
