@@ -1,8 +1,21 @@
-name: python_ebsd
+# Automatically created from setup.cfg
+name: ebsdlab
 channels:
   - conda-forge
 dependencies:
+  - python>=3.10
+  - pillow
   - numpy
-  - matplotlib
   - scipy
+  - matplotlib
+  # Development dependencies
+  - sphinx
+  - jupyter_sphinx
+  - sphinx_tabs
   - pytest
+  - isort
+  - mypy
+  - pylint
+  - pre-commit
+  - requests
+  - pip-tools
