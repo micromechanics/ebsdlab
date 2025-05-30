@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 ##
 # @file
 # @brief Rodrigues representation of rotation
@@ -8,23 +7,22 @@
 import numpy as np
 from ebsdlab.quaternion import Quaternion
 
+
 ##
 #  Rodrigues representation of rotation
-############################## <HR>
+# <HR>
 #
 class Rodrigues:
 
-    def __init__(self, vector = np.zeros(3)):
-      self.vector = vector
-
+    def __init__(self, vector=np.zeros(3)):
+        self.vector = vector
 
     def asQuaternion(self):
-      norm = np.linalg.norm(self.vector)
-      halfAngle = np.arctan(norm)
-      return Quaternion(np.cos(halfAngle),np.sin(halfAngle)*self.vector/norm)
-
+        norm = np.linalg.norm(self.vector)
+        halfAngle = np.arctan(norm)
+        return Quaternion(np.cos(halfAngle), np.sin(halfAngle)*self.vector/norm)
 
     def asAngleAxis(self):
-      norm = np.linalg.norm(self.vector)
-      halfAngle = np.arctan(norm)
-      return (2.0*halfAngle,self.vector/norm)
+        norm = np.linalg.norm(self.vector)
+        halfAngle = np.arctan(norm)
+        return (2.0*halfAngle, self.vector/norm)

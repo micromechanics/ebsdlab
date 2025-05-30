@@ -1,0 +1,13 @@
+pillow
+numpy
+scipy
+matplotlib
+sphinx
+jupyter_sphinx
+sphinx_tabs
+pytest
+isort
+mypy
+pylint
+pre-commit
+requests

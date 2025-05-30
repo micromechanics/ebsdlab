@@ -7,7 +7,8 @@ import os
 import sys
 package_path = os.path.abspath('../../')
 sys.path.insert(0, package_path)
-os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
+os.environ['PYTHONPATH'] = ':'.join(
+    (package_path, os.environ.get('PYTHONPATH', '')))
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information

@@ -159,5 +159,3 @@ Hints for developers
      git gui
      git commit -m "solved symbolic link issue"
      git push -u origin master
-
-

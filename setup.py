@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 """The setup script."""
 
@@ -13,9 +12,9 @@ setup_requirements = ['pytest-runner', ]
 install_requires = ['numpy', 'matplotlib', 'scipy', 'scikit-learn', 'pytest']
 
 setup(
-    name='py_ebsd',
-    author="Steffen Brinckmann",
-    author_email='',
+    name='ebsdlab',
+    author='Steffen Brinckmann',
+    author_email='sbrinckm@gmail.com',
     python_requires='>=3',
     classifiers=[
         'Development Status :: 3 - Beta',
@@ -27,14 +26,14 @@ setup(
         'Programming Language :: Python :: 3.11',
         'Programming Language :: Python :: 3.12',
     ],
-    description="Read, process and plot EBSD (electron backscatter diffraction) data",
+    description='Read, process and plot EBSD (electron backscatter diffraction) data',
     install_requires=['numpy', 'matplotlib', 'scipy'],
-    license="GNU General Public License v3",
+    license='GNU General Public License v3',
     long_description=readme,
     include_package_data=True,
     keywords='EBSD',
-    packages=find_packages('src', exclude=["*tests*"]),
-    package_dir={'': 'src'},
+    packages=find_packages('ebsdlab', exclude=['*tests*']),
+    package_dir={'': 'ebsdlab'},
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,

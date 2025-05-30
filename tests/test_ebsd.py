@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from ebsdlab.ebsd import EBSD
 
+
 class TestStringMethods(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
@@ -17,9 +18,9 @@ class TestStringMethods(unittest.TestCase):
         e = EBSD(str(self.dataDir/'EBSD.ang'))
         return
 
-
     def tearDown(self):
         return
 
+
 if __name__ == '__main__':
-      unittest.main()
+    unittest.main()

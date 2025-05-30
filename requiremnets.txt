@@ -1,7 +1,0 @@
-# Devel
-sphinx
-jupyter_sphinx
-sphinx_tabs
-
-
-# All
