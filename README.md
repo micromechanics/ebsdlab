@@ -1,5 +1,7 @@
 # ebsdlab
 
+ALPHA-VERSION: TRY AT OWN RISK
+
 Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in scanning electron microscopes to determine the crystallographic orientation of metals at the micrometer scale. This software package provides tools to import, analyze, and visualize the spatially resolved orientation data obtained from EBSD experiments, facilitating microstructural characterization.
 
 ## Features:

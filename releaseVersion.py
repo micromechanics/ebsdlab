@@ -82,7 +82,7 @@ def prevVersionsFromPypi(k: int = 15) -> None:
     Args:
       k (int): number of information
     """
-    url = 'https://pypi.org/pypi/pasta-eln/json'
+    url = 'https://pypi.org/pypi/ebsdlab/json'
     with urlopen(url) as response:
         data = json.loads(response.read())
     releases = list(data['releases'].keys())
@@ -102,16 +102,6 @@ def newVersion(level: int = 2) -> None:
     Args:
       level (int): which number of the version to increase 0=mayor,1=minor,2=sub
     """
-    # last 10 releases from pypi
-    url = 'https://pypi.python.org/pypi/pasta-eln/json'
-    with urlopen(url) as response:
-        data_json = json.loads(response.read())
-    labels, dates = [], []
-    for release in data_json['releases']:
-        labels.append(release)
-        dates.append(data_json['releases'][release][0]['upload_time'])
-    print('Latest versions on Pypi')
-    print('  '+', '.join([x for _, x in sorted(zip(dates, labels))][-10:]))
     print('Create new version...')
     prevVersionsFromPypi()
     # get old version number
