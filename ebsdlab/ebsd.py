@@ -706,21 +706,22 @@ class EBSD:
         mask = griddata(
             points, ~self.mask[self.vMask], (x, y), interpolationType)
         # plot if/if-not the maximum and minimum are given
+        fig, ax = plt.subplots()
         if vmax != '' and vmin != '':
-            plt.imshow(np.ma.masked_where(mask, z.astype(float)), extent=[
+            im = ax.imshow(np.ma.masked_where(mask, z.astype(float)), extent=[
                        xMin, xMax, yMax, yMin], cmap=cmap, vmax=vmax, vmin=vmin, origin='upper')
         else:
-            plt.imshow(np.ma.masked_where(mask, z.astype(float)), extent=[
+            im = ax.imshow(np.ma.masked_where(mask, z.astype(float)), extent=[
                        xMin, xMax, yMax, yMin], cmap=cmap, origin='upper')
         if cbar:
-            plt.colorbar()
+            fig.colorbar(im, ax=ax)
         print('   Plot with x and y axis in [um]')
         print('Duration plot: ', int(np.round(time.time()-startTime)), 'sec')
         if show:
             plt.show()
         z *= 255/np.max(z)
         self.image = Image.fromarray(z.astype(float))
-        return
+        return fig
 
     def plotRGB(self, rgb, widthPixel=256, interpolationType='nearest', fileName=None):
         """
@@ -764,8 +765,9 @@ class EBSD:
             heightPixel, 3, widthPixel), (0, 2, 1))
         # finally plot
         self.image = Image.fromarray(imageArray)
-        plt.imshow(self.image, extent=[xMin, xMax, yMax, yMin], origin='upper')
-        return
+        fig, ax = plt.subplots()
+        ax.imshow(self.image, extent=[xMin, xMax, yMax, yMin], origin='upper')
+        return fig
 
     def plotIPF(self, direction='ND', widthPixel=None, fileName=None, interpolationType='nearest'):
         """
@@ -803,14 +805,15 @@ class EBSD:
                 if len(rgbs_.shape) == 2:
                     rgbs[:, ~flags] = rgbs_
                     flags[~flags] = flags_
-        self.plotRGB(rgbs, widthPixel, interpolationType, fileName)
+        fig = self.plotRGB(rgbs, widthPixel, interpolationType, fileName)
         print('Duration plotIPF: ', int(np.round(time.time()-startTime)), 'sec')
         if fileName == None:
             plt.show()
         else:
             plt.savefig(fileName, dpi=150, bbox_inches='tight')
             plt.close()
-        return
+        return fig
+
 
     def addSymbol(self, x, y, fileName=None, scale=1., colorCube='black'):
         """
@@ -951,16 +954,17 @@ class EBSD:
                   textString, 'black', font=font)
         xMax, xMin = np.max(self.x[self.vMask]), np.min(self.x[self.vMask])
         yMax, yMin = np.max(self.y[self.vMask]), np.min(self.y[self.vMask])
-        plt.imshow(image, origin='upper')
-        plt.xticks([])
-        plt.yticks([])
-        plt.axis('off')
+        fig, ax = plt.subplots()
+        ax.imshow(image, origin='upper')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.axis('off')
         if fileName == None:
             plt.show()
         else:
             plt.savefig(fileName, dpi=150, bbox_inches='tight')
             plt.close()
-        return
+        return fig
 
     def plotPF(self, axis=[1, 0, 0], points=False, fileName=None, color='#1f77b4', alpha=1.0, show=True, density=256, size=2, proj2D='up-left', vmin=0.0, vmax=1.0):
         """
@@ -984,6 +988,7 @@ class EBSD:
           vmax:    max. used in color coding, allows to focus on minor texture
         """
         startTime = time.time()
+        fig, ax = plt.subplots()
         maxColor = tuple(np.array(colors.hex2color(color))*0.5)
         for sym in self.sym:
             if sym.__repr__() == None:
@@ -1009,17 +1014,17 @@ class EBSD:
                         (y, direction[1, :]))
         if points:
             if proj2D == 'down-right':
-                plt.plot(-x, y, '.', color=maxColor,
+                ax.plot(-x, y, '.', color=maxColor,
                          markersize=size)  # markersize=0.05
             elif proj2D == 'up-left':
-                plt.plot(-y, x, '.', color=maxColor,
+                ax.plot(-y, x, '.', color=maxColor,
                          markersize=size)  # markersize=0.05
             else:
                 return
-            plt.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
+            ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
                      np.sin(np.linspace(0, 2*np.pi, 100)), 'k-')
-            plt.plot([-1, 1], [0, 0], 'k--')
-            plt.plot([0, 0], [-1, 1], 'k--')
+            ax.plot([-1, 1], [0, 0], 'k--')
+            ax.plot([0, 0], [-1, 1], 'k--')
         else:
             cmap = colors.LinearSegmentedColormap.from_list(
                 'my', [(1, 1, 1), maxColor])
@@ -1043,21 +1048,21 @@ class EBSD:
             img /= np.max(img)                               # normalize
             # filter out low values to make transparent
             img[img < vmin] = np.nan
-            plt.imshow(img, cmap=cmap, alpha=alpha,
+            ax.imshow(img, cmap=cmap, alpha=alpha,
                        vmin=0.0, vmax=vmax, origin='lower')
-            plt.plot(center*np.cos(np.linspace(0, 2*np.pi, 100))+center+size,
+            ax.plot(center*np.cos(np.linspace(0, 2*np.pi, 100))+center+size,
                      center*np.sin(np.linspace(0, 2*np.pi, 100))+center+size, 'k-', lw=2)
-            plt.plot([center+size, center+size],
+            ax.plot([center+size, center+size],
                      [size, imgDim-size], 'k--', lw=1)
-            plt.plot([size, imgDim-size],
+            ax.plot([size, imgDim-size],
                      [center+size, center+size], 'k--', lw=1)
             # plt.colorbar()
-        plt.xlim([-1, 1])
-        plt.ylim([-1, 1])
-        plt.xticks([])
-        plt.yticks([])
-        plt.axis('equal')
-        plt.axis('off')
+        ax.set_xlim([-1, 1])
+        ax.set_ylim([-1, 1])
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.axis('equal')
+        ax.axis('off')
         print('Duration plotPF: ', int(np.round(time.time()-startTime)), 'sec')
         if fileName == None:
             plt.show()
@@ -1065,5 +1070,5 @@ class EBSD:
             plt.savefig(fileName, dpi=150, bbox_inches='tight')
             plt.clf()
             plt.cla()
-        return
+        return fig
     # @}

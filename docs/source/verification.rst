@@ -1,21 +1,13 @@
 .. encoding: utf-8 -*-
 .. _verification:
 
-Verification
-============
+Compare results to that of OIM and mTex
+=======================================
 
+Trust is important for all software; comparison with other software increases trust. For EBSD analyising software this comparison is complicated by different coordinate systems, different projection directions and different color schemes. Here, we compare the results of ebsdlab with mTex and the OIM software.
 
-Compare pythonEBSD with OIM and mTex (TODO)
--------------------------------------------
-
-.. jupyter-execute::
-
-   from ebsdlab.ebsd import EBSD
-   e = EBSD("../tests/DataFiles/EBSD.ang")
-   e.maskCI(0.001)
-   e.plotPF(size=1)
-   e.plotPF()
-   e.plotPF(proj2D='down-right')
+Compare pythonEBSD with OIM and mTex
+------------------------------------
 
 .. list-table:: Comparison Table
    :header-rows: 1
@@ -23,7 +15,7 @@ Compare pythonEBSD with OIM and mTex (TODO)
    * - description
      - OIM software
      - mTex software
-     - this python code
+     - **ebsdlab**
    * - IPF ND*
      - .. image:: _static/ebsd_OIM_ND.bmp
           :height: 300px
@@ -38,16 +30,16 @@ Compare pythonEBSD with OIM and mTex (TODO)
      - .. image:: _static/ebsd_py_RD.png
           :height: 300px
 
-Issues from mTex:
+Issues in mTex:
 
-- .bmp (left): low color number when exporting from external window. .png works (right)
+- Inverse pole figure: bmp image (left) has a low color number when exporting from external window. The png figure export works better (right)
 
   .. image:: _static/ebsd_mTex_ND.bmp
      :height: 300px
   .. image:: _static/ebsd_mTex_ND.png
      :height: 300px
 
-- Explicitly select x-axis as North and z-axis as outOfPlane; normal orientation has different result, although it should be the same
+- Pole-figure: Explicitly select x-axis as North and z-axis as outOfPlane; normal orientation has different result, although it should be the same
 
   .. image:: _static/ebsd_mTex_PF100Contour_xNorthzOutOfPlane.png
      :height: 200px
@@ -56,7 +48,7 @@ Issues from mTex:
 
 
 Compare the three software for bicrystal
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------------
 
 .. list-table:: Bicrystal Comparison
    :header-rows: 1
@@ -64,7 +56,7 @@ Compare the three software for bicrystal
    * - description
      - OIM software
      - mTex software
-     - this python code
+     - **ebsdlab**
    * - IPF ND*
      - .. image:: _static/bc_OIM_ND.bmp
           :width: 300px
@@ -86,26 +78,27 @@ Compare the three software for bicrystal
      - .. image:: _static/bc_py_PF.png
           :height: 200px
 
-Python code:
 
-.. code-block:: python
+Python code to create ebsdlab results:
 
-   from ebsdlab.ebsd import EBSD
-   e = EBSD("../tests/DataFiles/EBSD.ang")
-   e.cropVMask(ymin=35)
-   e.plotIPF("ND", fileName="doctest.png")
-   e.addSymbol(5,37, scale=2)
-   e.addSymbol(18,37, scale=2, fileName="doctest.png")
-   e.plotIPF("RD", fileName="pythonRD.png")
-   e.addSymbol(5,37, scale=2)
-   e.addSymbol(18,37, scale=2, fileName="pythonRD.png")
-   e.plotIPF("TD", fileName="pythonTD.png")
-   e.addSymbol(5,37, scale=2)
-   e.addSymbol(18,37, scale=2, fileName="pythonTD.png")
-   e.plotPF(fileName="pythonPF.png")
+.. jupyter-execute::
 
-.. note::
-   The last image is not colored. This is not implemented yet. TODO
+from ebsdlab.ebsd import EBSD
+e = EBSD("tests/DataFiles/EBSD.ang")
+e.cropVMask(ymin=35)
+e.plotIPF("ND")
+e.addSymbol(5,37, scale=2)
+
+TODO: symbols has syntax error: start here
+
+e.addSymbol(18,37, scale=2)
+e.plotIPF("RD")
+e.addSymbol(5,37, scale=2)
+e.addSymbol(18,37, scale=2)
+e.plotIPF("TD")
+e.addSymbol(5,37, scale=2)
+e.addSymbol(18,37, scale=2)
+
 
 How to run mTex
 ---------------
@@ -135,27 +128,37 @@ If separate window: save as png, because bmp colorscale is broken
 - select xNorth zOutOfPlane as axis in mTex
 - compare to original which should be the same
 
-Data that exists and can be used for plotting in plot:
-------------------------------------------------------
+Example: Compare to OIM Software
+--------------------------------
 
-- OIM software:
-  - e.phi1, e.PHI, e.phi2 : Euler angles saved as quaternions
-  - e.x, e.y : x,y coordinates
-  - e.IQ, e.CI, e.phaseID : Image Quality, confidence index (bad=0 ... good=1), phase id
-  - e.SEMsignal : SEM signal
-  - e.fit :
-- Oxford:
-  - bc: band contrast
+OIM software shows the 2D projection with the Rolling Direction (RD) upward. Note that many textbooks have the RD downward. The Normal Direction (ND) always points out of the plane; the Transverse Direction (TD) changes depending on RD.
 
-Hints for developers
---------------------
+.. jupyter-execute::
 
-- run ``./verifyAll.py`` after all changes to verify the code and create the html-documentation
-- git commands:
+   import numpy as np
+   from ebsdlab.orientation import Orientation
+   o = Orientation(Eulers=np.radians([0,10,10]), symmetry="cubic")
+   o.plot( )
+   o.plot(plot2D='up-left')
+   o.plot(poles=[1,0,0], plot2D='up-left', scale=1.5)
+   o.plot(poles=[1,1,1])
+   o.toScreen(equivalent=False)
 
-  .. code-block:: bash
+Which outputs HKL and UVW as integers:
+    - Euler angles: [ 0. 10. 10.]
+    - HKL [ 1  5 32]
+    - UVW [ 5 -1  0]
 
-     git add -A
-     git gui
-     git commit -m "solved symbolic link issue"
-     git push -u origin master
+The HKL and UVW vectors are rounded to integers, hence they are approximate values. They are convenient for quick inspection but not precise.
+
+TODO; see if still needed
+.. Python code of ebsdlab to create
+..
+.. .. jupyter-execute::
+..
+..    from ebsdlab.ebsd import EBSD
+..    e = EBSD("../tests/DataFiles/EBSD.ang")
+..    e.maskCI(0.001)
+..    e.plotPF(size=1)
+..    e.plotPF()
+..    e.plotPF(proj2D='down-right')

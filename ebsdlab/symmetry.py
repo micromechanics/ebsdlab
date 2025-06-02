@@ -6,6 +6,7 @@
 #
 import math
 import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
 import numpy as np
 from .quaternion import Quaternion
 
@@ -367,16 +368,16 @@ class Symmetry:
         l = 2.0 / (inPlane[0]*inPlane[0] + inPlane[1]*inPlane[1] + 1.)
         if inPlane.ndim == 1:
             print(l)
-            hkl = np.zeros((3), dtype=np.float)
+            hkl = np.zeros((3), dtype=float)
             hkl[:2] = l*inPlane
             hkl[2] = l-1.0
         else:
-            hkl = np.zeros((3, inPlane.shape[1]), dtype=np.float)
+            hkl = np.zeros((3, inPlane.shape[1]), dtype=float)
             hkl[:2, :] = l*inPlane
             hkl[2, :] = l-1.0
         return hkl
 
-    def standardTriangle(self, fileName=None, show=True, stepSize=0.01):
+    def standardTriangle(self, fileName=None, show=True, stepSize=0.1):
         """
         Plot standard triangle with background, discrete points in color, save to file, add text
 
@@ -389,7 +390,6 @@ class Symmetry:
            show: True [default] shows figure, else not
            stepSize: plotting accuracy: lower value=better quality
         """
-        from scipy.interpolate import interp1d
         if self.lattice != 'cubic':
             print('ERROR: only implemented for cubic lattice')
             return
@@ -413,27 +413,28 @@ class Symmetry:
                     continue
                 xy.append([iX, iY])
         xy = np.array(xy)
+
         hkl = self.xyToHKL(xy.T)
-        flags, rgb = self.inSST(hkl, color=True, proper=False)
+        print(hkl)
+        _, rgb = self.inSST(hkl, color=True, proper=False)
         colors = []
         for i in range(rgb.shape[1]):
-            values = rgb[:, i]*255
+            values = (rgb[:, i]*255).astype(int)
             string = f'#{values[0]:02x}{values[1]:02x}{values[2]:02x}'
             colors.append(string)
         # plotting: background, border, labels
-        plt.scatter(xy[:, 0], xy[:, 1], c=colors, s=15000. *
+        fig, ax = plt.subplots()
+        ax.scatter(xy[:, 0], xy[:, 1], c=colors, s=15000. *
                     stepSize, linewidths=0)  # , alpha=0.05)
-        plt.plot(border[:, 0], border[:, 1], '-k', linewidth=3)  # , alpha=0.5)
+        ax.plot(border[:, 0], border[:, 1], '-k', linewidth=3)  # , alpha=0.5)
         plt.rcParams['font.size'] = 18.
-        plt.text(0, 0, '[100]', horizontalalignment='right')  # , zorder=40
-        plt.text(0.42, 0, '[110]')
-        plt.text(0.37, 0.37, '[111]')
-        plt.axis('off')
-        plt.axis('equal')
+        ax.text(0, 0, '[100]', horizontalalignment='right')  # , zorder=40
+        ax.text(0.42, 0, '[110]')
+        ax.text(0.37, 0.37, '[111]')
+        ax.axis('off')
+        ax.axis('equal')
         if fileName:
             plt.savefig(fileName)
         if show:
             plt.show()
-        return
-
-    # @}
+        return fig

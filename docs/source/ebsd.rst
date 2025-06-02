@@ -25,24 +25,68 @@ Let's looking at inverse pole figure (IPF) in normal direction (ND) and pole-fig
    e = EBSD("../tests/DataFiles/EBSD.ang")
    print('\nPlot confidence index:')
    e.plot(e.CI)
-   print('\nPlot confidence index with mask:')
-   e.maskCI(0.1)
-   e.plot(e.CI)
    print('\nPlot default IPF:')
    e.plotIPF()
-   print('\nPlot IPF with 1024 pixel resolution:')
-   e.plotIPF(1024)
+   print('\nSame plot as before but with scale bar:')
    e.addScaleBar()
-   e.setVMask(4)  # use only every 4th point, increases plotting speed
-   print('\nPlot IPF with scale-bar and with 1024 pixel resolution:TODO')
-   e.plotIPF(1024)
-   print('\nPlot IPF of the cropped area with 1024 pixel resolution:')
-   e.cropVMask(0,0,10,10)  # show only a section of the image, increases plotting speed
-   e.plotIPF(1024)
    print('\nPlot PF as a density:')
    e.plotPF([1,0,0])
-   print('\nPlot PF as points:')
-   e.plotPF([1,0,0], points=True)
+
+----
+
+The following table shows details that can improve / modify the plots.
+
+.. list-table::
+   :widths: 40 60
+   :header-rows: 1
+
+   * - Python code
+     - Image
+   * - .. code-block:: python
+
+          #Plot confidence index (CI) with CI mask:
+          e.maskCI(0.1)
+          e.plot(e.CI)
+     - .. image:: /_static/test_ebsd_ci_mask.png
+   * - .. code-block:: python
+
+          #Plot IPF with 1024 pixel resolution:
+          e.plotIPF(1024)
+     - .. image:: /_static/test_ebsd_ipf_1024.png
+   * - .. code-block:: python
+
+          #Plot IPF but only every 4th point
+          #  increases plotting speed:
+          e.setVMask(4)
+          e.plotIPF(1024)
+     - .. image:: /_static/test_ebsd_ipf_vmask.png
+   * - .. code-block:: python
+
+          #Plot section of IPF
+          e.cropVMask(0,0,10,10)
+          e.plotIPF(1024)
+     - .. image:: /_static/test_ebsd_ipf_crop.png
+   * - .. code-block:: python
+
+          #Plot Pole Figure (PF) with points:
+          e.plotPF([1,0,0], points=True)
+     - .. image:: /_static/test_ebsd_pf_points.png
+
+Data that exists and can be used for plotting in plot
+-----------------------------------------------------
+
+- OIM software:
+
+  - e.phi1, e.PHI, e.phi2 : Euler angles saved as quaternions
+  - e.x, e.y : x,y coordinates
+  - e.IQ, e.CI, e.phaseID : Image Quality, confidence index (bad=0 ... good=1), phase id
+  - e.SEMsignal : SEM signal
+  - e.fit :
+
+- Oxford:
+
+  - bc: band contrast
+
 
 Example: Interaction with OIM Software to update grain information
 ------------------------------------------------------------------

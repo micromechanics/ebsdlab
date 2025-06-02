@@ -1,20 +1,16 @@
-Example: Compare with OIM software and verify data (TODO)
----------------------------------------------------------
+Example: Verify numbers
+-----------------------
+
+Verify the data by using ebsdlab and OIM software.
 
 .. code-block:: python
 
    import numpy as np
    from ebsdlab.ebsd import EBSD
    from ebsdlab.orientation import Orientation
-   e = EBSD("Examples/EBSD.ang", doctest=True)
-   # Load .ang file:  Examples/EBSD.ang
-   #    Read file with step size: 0.2 0.2
-   #    Optimal image pixel size: 103
-   #    Number of points: 23909
-   e.maskCI(0.001)
-   e.plotIPF('ND')  # doctest: +SKIP
+   e = EBSD("Examples/EBSD.ang")
    e.cropVMask(xmin=18, ymin=12, ymax=17)
-   e.plotIPF('ND')  # doctest: +SKIP
+   e.plotIPF('ND')
 
 Inspect the original data at x,y = 20.1,14.38 um (line 8785 from EBSD.ang):
 
@@ -32,15 +28,3 @@ Inspect the original data at x,y = 20.1,14.38 um (line 8785 from EBSD.ang):
    # [ -42.  125. -140.]
    print(np.round(np.degrees(angle)+np.array([360,0,360])))
    # [318. 125. 220.]
-
-Plot correct unit cells and pole-figures using the orientation-class:
-
-.. code-block:: python
-
-   o = Orientation(Eulers=angle, symmetry="cubic")
-   o.doctest = True
-   o.toScreen()  # first item is one looking for #doctest: +SKIP
-   o.plot(plot2D='up-left')
-   doctestImage("ebsd_10")
-   o.plot(poles=[1,0,0], plot2D='up-left', scale=1.5)
-   doctestImage("ebsd_11")

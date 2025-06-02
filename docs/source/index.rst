@@ -20,11 +20,10 @@ Features
 The following modules exist
 ---------------------------
 
-- :class:`ebsdlab.ebsd.EBSD` read/use EBSD data from files, generate random, plotting
-- :class:`ebsdlab.orientation.Orientation` material symmetry + rotation of a material point
-- :class:`ebsdlab.symmetry.Symmetry` material symmetry: cubic, hex, ...
-- :class:`ebsdlab.quaternion.Quaternion` mathematical description of rotations
-- :class:`ebsdlab.rodrigues.Rodrigues` rotation description (not used in any other file)
+- :class:`ebsdlab.ebsd.EBSD`: Read EBSD data from files, plotting inverse pole figures (IPF), pole figures (PF) or normal maps
+- :class:`ebsdlab.symmetry.Symmetry`: Material symmetry: cubic structure, hex, ...
+- :class:`ebsdlab.orientation.Orientation`: Sum of aterial symmetry and the rotation for a material point
+- :class:`ebsdlab.quaternion.Quaternion`: Mathematical description of rotations
 
 
 Table of Contents
@@ -36,6 +35,7 @@ Table of Contents
 
    installation
    ebsd
+   symmetry
+   orientation
    verification
-   orientation1
    api

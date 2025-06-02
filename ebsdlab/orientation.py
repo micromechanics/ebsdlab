@@ -372,8 +372,8 @@ class Orientation:
 
         if unitCell:
             for line in self.symmetry.unitCell():
-                start, end = np.array(line[:3], dtype=np.float), np.array(
-                    line[3:], dtype=np.float)
+                start, end = np.array(line[:3], dtype=float), np.array(
+                    line[3:], dtype=float)
                 start = self.quaternion*start
                 end = self.quaternion*end
                 if start[2] < 0 and end[2] < 0:
@@ -410,7 +410,7 @@ class Orientation:
             # plot poles
             oHelp = Orientation(Eulers=np.array(
                 [0., 0., 0.]), symmetry=self.symmetry.__repr__())
-            poles = np.array(poles, dtype=np.float)
+            poles = np.array(poles, dtype=float)
             poles /= np.linalg.norm(poles)
             for idx, q in enumerate(oHelp.symmetry.equivalentQuaternions(oHelp.quaternion)):
                 conjAxis = q*poles  # e.g. [100]
@@ -428,7 +428,7 @@ class Orientation:
                 self.plotLine(ax, xy, [0., 0., 0.], color='c')  # plot point
                 if annotate:
                     x_, y_ = self.project(xy[0], xy[1], xy[2])
-                    label_ = str(np.array(conjAxis, dtype=np.int))[1:-1]
+                    label_ = str(np.array(conjAxis, dtype=int))[1:-1]
                     label_ = label_.replace(' ', '')
                     ax.text(x_+0.05, y_+0.05, label_)
 
@@ -460,8 +460,8 @@ class Orientation:
         print('Euler angles:', np.round(
             self.quaternion.asEulers(degrees=True), 1))
         rotM = self.quaternion.asMatrix()
-        print('HKL', np.array(rotM[2, :]/np.min(rotM[2, :]), dtype=np.int))
-        print('UVW', -np.array(rotM[0, :]/np.min(rotM[0, :]), dtype=np.int))
+        print('HKL', np.array(rotM[2, :]/np.min(rotM[2, :]), dtype=int))
+        print('UVW', -np.array(rotM[0, :]/np.min(rotM[0, :]), dtype=int))
         if equivalent:
             print('Equivalent orientations - Euler angles:')
             for q in self.symmetry.equivalentQuaternions(self.quaternion):

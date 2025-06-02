@@ -16,3 +16,8 @@ div.highlight pre, /* General Sphinx code blocks */
 {
     font-size: 120%;
 }
+
+/* Hide the right "Page contents" sidebar */
+/* #right_sidebar {
+    display: none !important;
+} */
