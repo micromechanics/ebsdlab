@@ -14,7 +14,6 @@ dependencies:
   - sphinx_tabs
   - pytest
   - pytest-mpl
-  - bump-my-version
   - isort
   - mypy
   - pylint

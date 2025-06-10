@@ -116,7 +116,25 @@ def newVersion(level: int = 2) -> None:
     reply = input(f'Create version (2.5, 3.1.4b1): [{version}]: ')
     version = version if not reply or len(reply.split('.')) < 2 else reply
     print(f'======== Version {version} =======')
-    os.system(f'bump-my-version bump --new-version {version}')
+    # git commands and update python files
+    os.system('git pull')
+    filesToUpdate = {'ebsdlab/__init__.py': '__version__ = ',
+                     'docs/source/conf.py': 'version = ',
+                     'setup.cfg': 'version = '}
+    for path, text in filesToUpdate.items():
+        with open(path, encoding='utf-8') as fIn:
+            fileOld = fIn.readlines()
+        fileNew = []
+        for line in fileOld:
+            line = line[:-1]  # only remove last char, keeping front part
+            if line.startswith(text):
+                line = f"{text}'{version}'"
+            fileNew.append(line)
+        with open(path, 'w', encoding='utf-8') as fOut:
+            fOut.write('\n'.join(fileNew)+'\n')
+    os.system('git commit -a -m "update version numbers"')
+    os.system(
+        f'git tag -a v{version} -m "Version {version}; see CHANGELOG for details"')
     # create CHANGELOG / Contributor-list
     # with open(Path.home()/'.ssh'/'github.token', encoding='utf-8') as fIn:
     #     token = fIn.read().strip()
