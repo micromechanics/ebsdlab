@@ -104,10 +104,10 @@ This example demonstrates how to process an OIM data file using this Python libr
 
 2. Process with python: remove some masked points:
 
-   .. code-block:: python
+   .. jupyter-execute::
 
-      e = EBSD("../tests/DataFiles/Test.ang")
-      e.loadTXT("../tests/DataFiles/TestB.txt")
+      from ebsdlab.ebsd import EBSD
+      e = EBSD("../tests/DataFiles/EBSD.ang")
       e.maskCI(0.1)
       e.removePointsOfMask()
       e.writeANG("ebsd.ang")

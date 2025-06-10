@@ -189,7 +189,8 @@ class EBSD:
             if parts[1] == 'Header:':
                 print('   Header: ', parts[2])
                 continue
-            foundKeys[parts[3]] = int(parts[2].split(':')[0].split('-')[0])
+            if 'Column' in parts:
+              foundKeys[parts[3]] = int(parts[2].split(':')[0].split('-')[0])
         print('   Found data:', foundKeys)
         if 'Grain' in foundKeys:  # open new array if data exists
             self.grainID = -np.ones_like(self.phaseID)
