@@ -109,7 +109,7 @@ This example demonstrates how to process an OIM data file using this Python libr
       from ebsdlab.ebsd import EBSD
       e = EBSD("../tests/DataFiles/EBSD.ang")
       e.maskCI(0.1)
-      e.removePointsOfMask()
+      e.removePointsOutsideMask()
       e.writeANG("ebsd.ang")
 
 3. Which can then be read in OIM again.

@@ -190,7 +190,7 @@ class EBSD:
                 print('   Header: ', parts[2])
                 continue
             if 'Column' in parts:
-              foundKeys[parts[3]] = int(parts[2].split(':')[0].split('-')[0])
+                foundKeys[parts[3]] = int(parts[2].split(':')[0].split('-')[0])
         print('   Found data:', foundKeys)
         if 'Grain' in foundKeys:  # open new array if data exists
             self.grainID = -np.ones_like(self.phaseID)
@@ -546,9 +546,6 @@ class EBSD:
         """
         self.CI[~self.mask] = -1.0
         self.fit[~self.mask] = 180.0
-        self.phi1[~self.mask] = 12.5625
-        self.PHI[~self.mask] = 12.5625
-        self.phi2[~self.mask] = 12.5625
         return
 
     def setVMask(self, every=1):
@@ -710,10 +707,10 @@ class EBSD:
         fig, ax = plt.subplots()
         if vmax != '' and vmin != '':
             im = ax.imshow(np.ma.masked_where(mask, z.astype(float)), extent=[
-                       xMin, xMax, yMax, yMin], cmap=cmap, vmax=vmax, vmin=vmin, origin='upper')
+                xMin, xMax, yMax, yMin], cmap=cmap, vmax=vmax, vmin=vmin, origin='upper')
         else:
             im = ax.imshow(np.ma.masked_where(mask, z.astype(float)), extent=[
-                       xMin, xMax, yMax, yMin], cmap=cmap, origin='upper')
+                xMin, xMax, yMax, yMin], cmap=cmap, origin='upper')
         if cbar:
             fig.colorbar(im, ax=ax)
         print('   Plot with x and y axis in [um]')
@@ -814,7 +811,6 @@ class EBSD:
             plt.savefig(fileName, dpi=150, bbox_inches='tight')
             plt.close()
         return fig
-
 
     def addSymbol(self, x, y, fileName=None, scale=1., colorCube='black'):
         """
@@ -1016,14 +1012,14 @@ class EBSD:
         if points:
             if proj2D == 'down-right':
                 ax.plot(-x, y, '.', color=maxColor,
-                         markersize=size)  # markersize=0.05
+                        markersize=size)  # markersize=0.05
             elif proj2D == 'up-left':
                 ax.plot(-y, x, '.', color=maxColor,
-                         markersize=size)  # markersize=0.05
+                        markersize=size)  # markersize=0.05
             else:
                 return
             ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
-                     np.sin(np.linspace(0, 2*np.pi, 100)), 'k-')
+                    np.sin(np.linspace(0, 2*np.pi, 100)), 'k-')
             ax.plot([-1, 1], [0, 0], 'k--')
             ax.plot([0, 0], [-1, 1], 'k--')
         else:
@@ -1050,13 +1046,13 @@ class EBSD:
             # filter out low values to make transparent
             img[img < vmin] = np.nan
             ax.imshow(img, cmap=cmap, alpha=alpha,
-                       vmin=0.0, vmax=vmax, origin='lower')
+                      vmin=0.0, vmax=vmax, origin='lower')
             ax.plot(center*np.cos(np.linspace(0, 2*np.pi, 100))+center+size,
-                     center*np.sin(np.linspace(0, 2*np.pi, 100))+center+size, 'k-', lw=2)
+                    center*np.sin(np.linspace(0, 2*np.pi, 100))+center+size, 'k-', lw=2)
             ax.plot([center+size, center+size],
-                     [size, imgDim-size], 'k--', lw=1)
+                    [size, imgDim-size], 'k--', lw=1)
             ax.plot([size, imgDim-size],
-                     [center+size, center+size], 'k--', lw=1)
+                    [center+size, center+size], 'k--', lw=1)
             # plt.colorbar()
         ax.set_xlim([-1, 1])
         ax.set_ylim([-1, 1])

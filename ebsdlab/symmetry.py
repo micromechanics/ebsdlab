@@ -6,8 +6,8 @@
 #
 import math
 import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d
 import numpy as np
+from scipy.interpolate import interp1d
 from .quaternion import Quaternion
 
 
@@ -425,7 +425,7 @@ class Symmetry:
         # plotting: background, border, labels
         fig, ax = plt.subplots()
         ax.scatter(xy[:, 0], xy[:, 1], c=colors, s=15000. *
-                    stepSize, linewidths=0)  # , alpha=0.05)
+                   stepSize, linewidths=0)  # , alpha=0.05)
         ax.plot(border[:, 0], border[:, 1], '-k', linewidth=3)  # , alpha=0.5)
         plt.rcParams['font.size'] = 18.
         ax.text(0, 0, '[100]', horizontalalignment='right')  # , zorder=40

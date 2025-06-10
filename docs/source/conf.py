@@ -16,7 +16,7 @@ os.environ['PYTHONPATH'] = ':'.join(
 project = 'ebsdlab'
 copyright = '2025, S.Brinckmann, A.Hartmaier'
 author = 'S.Brinckmann, A.Hartmaier'
-release = '0.0.1'
+release = '0.0.6'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
