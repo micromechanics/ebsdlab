@@ -18,7 +18,7 @@ This example investigates three specific orientations, the Euler angles that def
 Each example:
 
     1. creates an euler-angle-triple in radians by using 3 degree values,
-    2. creates an Orientation object
+    2. creates an Orientation object (print it in one case)
     3. rounds the color for improved readability
 
 .. jupyter-execute::
@@ -28,6 +28,7 @@ Each example:
 
     angle = np.radians([0,0,0])
     o = Orientation(Eulers=angle, symmetry="cubic")
+    print('Orientation object is easy to read:', o)
     np.round(o.IPFcolor([0,0,1]),3)
 
     angle = np.radians([0,45,0])
@@ -103,26 +104,29 @@ Example: Loop through all equivalent directions
 
 This example demonstrates how to iterate through all symmetrically equivalent directions and calculate them.
 
-  1. We create an orientation that we are interested in and a helping orientation which we use to iterate over its quaternions / directions.
-  2. Obtain an equivalent crystal axis of the helper-orientation by applying a base vector (e.g., [1,0,0]).
-  3. Calculate the sample direction  by transforming the sample coordinates of orientation 'o'
+  1. We create a crystal axis (e.g., [1,1,0]) that we are interested in.
+  2. We create an orientation that we are interested in (we print it to verify it)
+  3. We use a helping orientation which we use to iterate over its quaternions / directions (we print it for verification).
+  4. Obtain an equivalent crystal axis of the helper-orientation
+  3. Calculate the sample direction  by transforming using orientation 'o'
   4. Let's print the equivalent crystal axis and its transformed version
 
-TODO: Understand what changed during versions, why not working
+.. jupyter-execute::
 
-.. .. jupyter-execute::
-..
-.. import numpy as np
-.. from ebsdlab.orientation import Orientation
-.. o     = Orientation(Eulers=np.radians([0,45,0]), symmetry="cubic")
-.. oHelp = Orientation(Eulers=np.array([0.,0.,0.]), symmetry="cubic")
-.. for q_sym in oHelp.symmetry.symmetryQuats():
-..   equivalent_crystal_axis = q_sym * (q_sym.conjugated() * np.array([1,1,0]))
-..   sample_direction = o.quaternion.conjugated() * (o.quaternion * equivalent_crystal_axis)
-..   print(f"Crystal Axis: {np.round(equivalent_crystal_axis, 3)}, Sample Direction: {np.round(sample_direction, 3)}")
-..
-.. q_sym = oHelp.symmetry.symmetryQuats()[0]
-.. equivalent_crystal_axis = q_sym.conjugated() * np.array([1,0,0]) * q_sym
+    import numpy as np
+    from ebsdlab.orientation import Orientation
+
+    crystal_axis = np.array([1, 1, 0])
+    o     = Orientation(Eulers=np.radians([0,45,0]), symmetry="cubic")
+    print('Orientation:\n',o,'\n')
+
+    oHelp = Orientation(Eulers=np.array([0.,0.,0.]), symmetry="cubic")
+    print('Help Orientation:\n',oHelp,'\n')
+
+    for q_sym in oHelp.symmetry.symmetryQuats():
+        equivalent_crystal_axis = q_sym * crystal_axis
+        sample_direction = o.quaternion * equivalent_crystal_axis
+        print(f"Crystal Axis: {str(np.round(equivalent_crystal_axis, 3)):<13}, Sample Direction: {np.round(sample_direction, 3)}")
 
 
 Example: Calculate average orientation

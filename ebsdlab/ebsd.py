@@ -290,7 +290,7 @@ class EBSD:
         fileOut.write('# khlFamilies 2 0 0 1 0.0\n')
         fileOut.write('# khlFamilies 2 2 0 1 0.0\n')
         fileOut.write('# khlFamilies 3 1 1 1 0.0\n')
-        fileOut.write('#\n# GRID: HexGrid\n#\n')  # TODO adopt
+        fileOut.write('#\n# GRID: HexGrid\n#\n')
         for i in range(len(self.x)):
             phi1, PHI, phi2 = tuple(self.quaternions[i].asEulers())
             fileOut.write(' %8.5f %8.5f %8.5f %12.5f %12.5f %8.3f %6.3f %2d %6d %7.3f\n' %
@@ -832,11 +832,11 @@ class EBSD:
 
         def trim(im):
             bg = Image.new(im.mode, im.size, im.getpixel((0, 0)))
-            diff = ImageChops.difference(im, bg)
+            diff = ImageChops.difference(im.convert('RGB'), bg.convert('RGB'))
             diff = ImageChops.add(diff, diff, 2.0, -100)
-            bbox = diff.getbbox()
-            if bbox:
+            if bbox:= diff.getbbox():
                 return im.crop(bbox)
+            return im
 
         fig = plt.figure()
         ax = fig.add_subplot(111)

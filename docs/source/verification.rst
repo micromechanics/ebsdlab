@@ -83,21 +83,18 @@ Python code to create ebsdlab results:
 
 .. jupyter-execute::
 
-from ebsdlab.ebsd import EBSD
-e = EBSD("tests/DataFiles/EBSD.ang")
-e.cropVMask(ymin=35)
-e.plotIPF("ND")
-e.addSymbol(5,37, scale=2)
-
-TODO: symbols has syntax error: start here
-
-e.addSymbol(18,37, scale=2)
-e.plotIPF("RD")
-e.addSymbol(5,37, scale=2)
-e.addSymbol(18,37, scale=2)
-e.plotIPF("TD")
-e.addSymbol(5,37, scale=2)
-e.addSymbol(18,37, scale=2)
+     from ebsdlab.ebsd import EBSD
+     e = EBSD("../tests/DataFiles/EBSD.ang")
+     e.cropVMask(ymin=35)
+     e.plotIPF("ND")
+     e.addSymbol(5,37, scale=2)
+     e.addSymbol(18,37, scale=2)
+     e.plotIPF("RD")
+     e.addSymbol(5,37, scale=2)
+     e.addSymbol(18,37, scale=2)
+     e.plotIPF("TD")
+     e.addSymbol(5,37, scale=2)
+     e.addSymbol(18,37, scale=2)
 
 
 How to run mTex
@@ -150,15 +147,3 @@ Which outputs HKL and UVW as integers:
     - UVW [ 5 -1  0]
 
 The HKL and UVW vectors are rounded to integers, hence they are approximate values. They are convenient for quick inspection but not precise.
-
-TODO; see if still needed
-.. Python code of ebsdlab to create
-..
-.. .. jupyter-execute::
-..
-..    from ebsdlab.ebsd import EBSD
-..    e = EBSD("../tests/DataFiles/EBSD.ang")
-..    e.maskCI(0.001)
-..    e.plotPF(size=1)
-..    e.plotPF()
-..    e.plotPF(proj2D='down-right')
