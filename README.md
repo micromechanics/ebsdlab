@@ -52,7 +52,7 @@ You can install `ebsdlab` using Conda or pip.
   ```
   After creation, activate the environment:
   ```console
-  $ conda activate ebsdlab_env
+  $ conda activate ebsdlab
   ```
 
   **Install the `ebsdlab` package:**
