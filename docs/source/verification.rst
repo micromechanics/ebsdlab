@@ -6,7 +6,7 @@ Compare results to that of OIM and mTex
 
 Trust is important for all software; comparison with other software increases trust. For EBSD analyising software this comparison is complicated by different coordinate systems, different projection directions and different color schemes. Here, we compare the results of ebsdlab with mTex and the OIM software.
 
-Compare pythonEBSD with OIM and mTex
+Compare ebsdlab with OIM and mTex
 ------------------------------------
 
 .. list-table:: Comparison Table

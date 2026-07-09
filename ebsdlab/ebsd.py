@@ -331,7 +331,6 @@ class EBSD:
         startPos = 0
         f.seek(startPos)
         startData = np.fromfile(f, dtype=np.uint8, count=bufferLength)
-        # startPos += [x for x in xrange(len(startData)-len(startBytes)) if (startData[x:x+len(startBytes)] == startBytes).all() ][0]
         startPos += find_subsequence(startData, startBytes)[0]
         f.seek(startPos+8)
 
@@ -417,7 +416,7 @@ class EBSD:
             'Bands',              # 10      "
             'Error',              # 11      "
             'ReliabilityIndex']    # 12      "
-        allDataType = np.ones((12,), dtype=np.int)
+        allDataType = np.ones((12,), dtype=int)
         allDataType[:6] = 4
         allDataType[-1] = 4
         columnNames, columnType = ['Phase'], [1]
@@ -599,7 +598,7 @@ class EBSD:
         if layers == 1:
             if idx is None:
                 original = np.outer(
-                    np.arange(len(self.x), dtype=np.int), np.ones([6,], dtype=np.int))
+                    np.arange(len(self.x), dtype=int), np.ones([6,], dtype=int))
                 neighbors = original.copy()
                 neighbors[:, 0] += -l
                 neighbors[:, 1] += -l+1
@@ -643,7 +642,7 @@ class EBSD:
             foundAngle = np.zeros((len(self.x)), dtype=bool)
             for nSQ in neighborSymQ:
                 theQ = symQ.conjugated()*misQ*nSQ
-                for k in xrange(2):  # try both conjugated versions
+                for k in range(2):  # try both conjugated versions
                     theQ.conjugate()  # verified before
                     theQ_Rod = abs(theQ.asRodrigues())
                     inFZ = np.logical_and(

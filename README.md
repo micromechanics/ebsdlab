@@ -4,6 +4,9 @@ ALPHA-VERSION: TRY AT OWN RISK
 
 Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in scanning electron microscopes to determine the crystallographic orientation of metals at the micrometer scale. This software package provides tools to import, analyze, and visualize the spatially resolved orientation data obtained from EBSD experiments, facilitating microstructural characterization.
 
+## Requirements
+`ebsdlab` supports Python >=3.10.
+
 ## Features:
   - File formats accepted .ang | .osc | .crc | .txt
   - can write .ang for FCC. Others could be added
@@ -81,9 +84,33 @@ After that, the package can be imported and used in Python codes as
 
 ```python
 >>> from ebsdlab import EBSD
->>> emap = EBSD("Examples/EBSD.ang")
->>> emap.plot(e.CI)
+>>> emap = EBSD("tests/DataFiles/EBSD.ang")
+>>> emap.plot(emap.CI)
 ```
+
+## Development
+Use the local `.venv/` when it has been prepared for this repository, or create an environment with Python >=3.10 and install the development requirements.
+
+```console
+$ python -m pip install -r requirements-dev.txt
+$ python -m pip install .
+```
+
+Run the test suite from the repository root:
+
+```console
+$ pytest --mpl --mpl-baseline-path=tests/baseline
+```
+
+Static checks are configured for:
+
+```console
+$ python -m mypy ebsdlab
+$ python -m pylint ebsdlab
+```
+
+## Issues
+Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may also be documented in this repository when they need to stay alongside the code.
 
 ## FAQ
 ### What features I do not envision:

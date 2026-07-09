@@ -312,10 +312,9 @@ class Quaternion:
         return np.outer([i for i in self], [i for i in self])
 
     def asMatrix(self):
-        return np.array([[1.0-2.0*(self.y*self.y+self.z*self.z),     2.0*(self.x*self.y-self.z*self.w),     2.0*(self.x*self.z+self.y*self.w)],
-                         [2.0*(self.x*self.y+self.z*self.w), 1.0-2.0*(self.x*self.x +
-                                                                      self.z*self.z),     2.0*(self.y*self.z-self.x*self.w)],
-                         [2.0*(self.x*self.z-self.y*self.w),     2.0*(self.x*self.w+self.y*self.z), 1.0-2.0*(self.x*self.x+self.y*self.y)]])
+        return np.array([[1.0-2.0*(self.y*self.y+self.z*self.z), 2.0*(self.x*self.y-self.z*self.w),      2.0*(self.x*self.z+self.y*self.w)],
+                         [2.0*(self.x*self.y+self.z*self.w),     1.0-2.0*(self.x*self.x +self.z*self.z), 2.0*(self.y*self.z-self.x*self.w)],
+                         [2.0*(self.x*self.z-self.y*self.w),     2.0*(self.x*self.w+self.y*self.z),      1.0-2.0*(self.x*self.x+self.y*self.y)]])
 
     def asAngleAxis(self, degrees=False):
         """
@@ -458,7 +457,7 @@ class Quaternion:
     @classmethod
     def fromRandom(cls, randomSeed=None):
         if randomSeed == None:
-            randomSeed = int(os.urandom(4).encode('hex'), 16)
+            randomSeed = int.from_bytes(os.urandom(4), 'big')
         random.seed(randomSeed)
         r1 = random.random()
         r2 = random.random()

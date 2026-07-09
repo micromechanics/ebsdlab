@@ -3,7 +3,7 @@
 Installation
 ============
 
-You can install `pythonEBSD` using Conda or pip.
+You can install `ebsdlab` using Conda or pip. `ebsdlab` supports Python >=3.10.
 
 .. tabs::
 
@@ -13,12 +13,12 @@ You can install `pythonEBSD` using Conda or pip.
 
       .. code-block:: console
 
-         $ git clone https://github.com/micromechanics/pythonEBSD.git ./pythonEBSD
-         $ cd pythonEBSD
+         $ git clone https://github.com/micromechanics/ebsdlab.git ./ebsdlab
+         $ cd ebsdlab
 
       **2. Create and activate the Conda environment:**
 
-      The `environment.yml` file defines the necessary dependencies and the environment name (e.g., `pythonEBSD_env`).
+      The `environment.yml` file defines the necessary dependencies and the environment name.
 
       .. code-block:: console
 
@@ -28,9 +28,9 @@ You can install `pythonEBSD` using Conda or pip.
 
       .. code-block:: console
 
-         $ conda activate pythonEBSD_env
+         $ conda activate ebsdlab
 
-      **3. Install the `pythonEBSD` package:**
+      **3. Install the `ebsdlab` package:**
 
       With the Conda environment activated, install the package using pip:
 
@@ -58,18 +58,18 @@ You can install `pythonEBSD` using Conda or pip.
          # On Windows (PowerShell):
          # .\venv_python_ebsd\Scripts\Activate.ps1
 
-      **2. Install the `pythonEBSD` package:**
+      **2. Install the `ebsdlab` package:**
 
       This command will install the package and its Python dependencies directly from GitHub:
 
       .. code-block:: console
 
-         $ pip install git+https://github.com/micromechanics/pythonEBSD.git
+         $ pip install git+https://github.com/micromechanics/ebsdlab.git
 
 After that, the package can be imported and used in Python codes as
 
 ```python
->>> import pythonEBSD
->>> emap = pythonEBSD.EBSD("Examples/EBSD.ang")
->>> emap.plot(e.CI)
+>>> from ebsdlab import EBSD
+>>> emap = EBSD("tests/DataFiles/EBSD.ang")
+>>> emap.plot(emap.CI)
 ```

@@ -8,7 +8,7 @@
 
 # .. code-block:: python
 
-# e = EBSD('Examples/EBSD.ang')
+# e = EBSD('tests/DataFiles/EBSD.ang')
 # e.cropVMask(xmin=18, ymin=12, ymax=17)
 # e.plotIPF('ND')
 
