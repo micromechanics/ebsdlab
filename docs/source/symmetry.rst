@@ -1,10 +1,14 @@
 .. encoding: utf-8 -*-
 .. _symmetry:
 
-Tutorials for Symmetry
-======================
+Tutorial for Symmetry
+=====================
 
-The **Symmetry** class is used to represent material symmetries (e.g., cubic, hex).
+The :class:`~ebsdlab.symmetry.Symmetry` class uses lattice names:
+``cubic``, ``hexagonal``, ``tetragonal``, and ``orthorhombic``. Internally,
+SciPy represents their proper rotational symmetries by the point-group codes
+``O``, ``D6``, ``D4``, and ``D2``. These SciPy groups are rotation groups, not crystallographic
+space groups.
 
 This example teaches the fundamentals of crystallography and shows how to determine if a vector lies within the standard stereographic triangle (SST) and retrieve its corresponding color for an Inverse Pole Figure (IPF) map.
 
@@ -38,4 +42,19 @@ At the end, we retrieve the standard triangle as an image.
     print("The color is:", color)
     s.standardTriangle()
 
-For detailed API documentation, please refer to :py:class:`~ebsd_Symmetry.Symmetry` (material symmetry).
+Unit cells
+----------
+
+``unitCell()`` returns the edges of a centered cell for every supported lattice.
+Its defaults are chosen to make the lattice shape clear in plots;
+they are not material-specific lattice parameters, as those differ from one material to the next. Cubic cells use
+``a = b = c = 1``; tetragonal and hexagonal cells use ``a = b = 1`` and
+``c = 1.5``; orthorhombic cells use ``a = 1``, ``b = 1.25``, and ``c = 1.5``.
+Positive lattice constants can be supplied when required:
+
+.. code-block:: python
+
+    cell = Symmetry('orthorhombic').unitCell(a=2.0, b=3.0, c=4.0)
+
+For detailed API documentation, refer to
+:class:`~ebsdlab.symmetry.Symmetry`.

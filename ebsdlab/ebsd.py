@@ -849,7 +849,7 @@ class EBSD:
               np.round(as_bunge_eulers(iQuaternion, degrees=True), 1))
         loc = np.array([x, y, 0])
         for sym in self.sym:
-            if sym.__repr__() == None:
+            if sym.lattice is None:
                 continue
             for line in sym.unitCell():
                 start = iQuaternion.apply(np.array(line[:3], dtype=float)*scale)
