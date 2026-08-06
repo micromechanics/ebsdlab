@@ -26,7 +26,7 @@ and angles are illustrative, so pass material-specific constants when needed.
        for edge in cells[lattice]:
            axes.plot(*edge.reshape(2, 3).T, color="C0", linewidth=2)
 
-       axes.set_title(lattice.capitalize())
+       axes.set_title(lattice.capitalize(), fontsize=20)
        axes.set_box_aspect((1, 1, 1))
        axes.set_xlim(-limit, limit)
        axes.set_ylim(-limit, limit)
