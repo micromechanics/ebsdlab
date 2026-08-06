@@ -7,6 +7,13 @@ from ebsdlab.ebsd import EBSD, SUPPORTED_SUFFIXES
 
 
 DATA_DIR = Path(__file__).parent/'DataFiles'
+ANG_DATA = '''# Symmetry 62
+# OPERATOR
+0 0 0 0 0 1 1 1 1 1
+0 0 0 1 0 1 1 1 1 1
+0 0 0 0 1 1 1 1 1 1
+0 0 0 1 1 1 1 1 1 1
+'''
 
 
 @pytest.mark.parametrize('data_file',
@@ -26,6 +33,24 @@ def test_osc_ipf_with_manually_supplied_symmetry():
 
     assert repr(ebsd.sym[0]) == 'cubic'
     assert np.any(np.asarray(ebsd.image))
+
+
+def test_ang_with_manual_non_cubic_symmetry_loads(tmp_path):
+    """A manually supplied symmetry permits ANG data with unknown metadata."""
+    data_file = tmp_path/'hexagonal.ang'
+    data_file.write_text(ANG_DATA)
+    ebsd = EBSD(data_file, symmetry='hexagonal')
+    assert len(ebsd.x) == 4
+    assert repr(ebsd.sym[0]) == 'hexagonal'
+
+
+def test_file_extensions_are_case_insensitive_and_invalid_ones_raise(tmp_path):
+    """Bad user input must not terminate the embedding Python process."""
+    data_file = tmp_path/'map.ANG'
+    data_file.write_text(ANG_DATA.replace('62', '43', 1))
+    assert len(EBSD(data_file).x) == 4
+    with pytest.raises(ValueError, match='Unsupported EBSD file format'):
+        EBSD(tmp_path/'map.unknown')
 
 
 @pytest.mark.mpl_image_compare

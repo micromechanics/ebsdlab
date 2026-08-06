@@ -5,7 +5,6 @@
 import io
 import math
 import os
-import sys
 import time
 from pathlib import Path
 import matplotlib.cm as cm
@@ -69,21 +68,23 @@ class EBSD:
         self.sym = []
 
         # read input file header and parse it
-        self.fileName = fileName
-        if (self.fileName[-3:] == 'ang'):
+        self.fileName = str(fileName)
+        suffix = Path(self.fileName).suffix.lower()
+        if suffix == '.ang':
             self.loadANG()
-        elif (self.fileName[-3:] == 'osc'):
+        elif suffix == '.osc':
             self.loadOSC()
-        elif (self.fileName[-3:] == 'txt'):
+        elif suffix == '.txt':
             self.loadTXT()
-        elif (self.fileName[-3:] == 'crc'):
+        elif suffix == '.crc':
             self.loadCRC()
-        elif (self.fileName[:4] == 'void'):
+        elif self.fileName.startswith('void'):
             print('Void mode', self.fileName[4:])
             self.loadVoid(self.fileName[4:])
         else:
-            print('This file-extension is not implemented yet')
-            sys.exit(2)
+            raise ValueError(
+                'Unsupported EBSD file format. Supported formats are '
+                + ', '.join(sorted(SUPPORTED_SUFFIXES)) + '.')
 
         if symmetry is not None:
             self.sym = [symmetry if isinstance(symmetry, Symmetry)
@@ -146,9 +147,6 @@ class EBSD:
         self.meta = dict(list(zip(keys, keyValues)))
         if self.meta['Symmetry'] == 43 or self.meta['Symmetry'] == 'm-3m':
             self.sym.append(Symmetry('cubic'))
-        else:
-            print('ERROR: no symmetry found')
-            return
         # read data: print "Reading file, this can take a bit..."
         data = np.loadtxt(fileHandle)
         self.phi1 = data[:, 0].astype(float)

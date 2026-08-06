@@ -24,6 +24,10 @@
 - Do not regenerate baseline images unless the visual change is intentional and reviewed.
 - Preserve user data files and local environment directories.
 - Prefer NumPy/SciPy APIs over ad hoc numerical code when they make behavior clearer.
+- Keep imported OSC Euler angles and scalar data as `float16` unless a task explicitly
+  requires higher precision. This is a deliberate memory/performance trade-off for
+  large maps: EBSD indexing angular accuracy is typically no better than about 0.1°,
+  so retaining `float32` input precision does not usually improve the physical result.
 
 ## Issues
 - Open issues are tracked in GitHub Issues for `micromechanics/ebsdlab`.

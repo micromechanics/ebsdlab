@@ -139,6 +139,10 @@ $ python -m pylint ebsdlab
 ## Issues
 Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may also be documented in this repository when they need to stay alongside the code.
 
+- Neighbour and KAM calculations currently require scan rows ordered by x with
+  a decreasing-x reset between rows. Single-row and differently ordered grids
+  are not yet supported.
+
 ## FAQ
 ### What features I do not envision:
   - include all crystal symmetries (materials science can mostly live with few)
