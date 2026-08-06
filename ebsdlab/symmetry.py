@@ -33,6 +33,8 @@ GROUPS: dict[str, dict[str, Any]] = {
             'geometry': 'orthogonal',
             'default_ratio': (1.0, 1.0, 1.0),
             'equal_to_a': ('b', 'c'),
+            'default_angles': (90.0, 90.0, 90.0),
+            'fixed_angles': (90.0, 90.0, 90.0),
         },
     },
     'hexagonal': {
@@ -53,6 +55,8 @@ GROUPS: dict[str, dict[str, Any]] = {
             'geometry': 'hexagonal',
             'default_ratio': (1.0, 1.0, 1.5),
             'equal_to_a': ('b',),
+            'default_angles': (90.0, 90.0, 120.0),
+            'fixed_angles': (90.0, 90.0, 120.0),
         },
     },
     'tetragonal': {
@@ -73,6 +77,8 @@ GROUPS: dict[str, dict[str, Any]] = {
             'geometry': 'orthogonal',
             'default_ratio': (1.0, 1.0, 1.5),
             'equal_to_a': ('b',),
+            'default_angles': (90.0, 90.0, 90.0),
+            'fixed_angles': (90.0, 90.0, 90.0),
         },
     },
     'orthorhombic': {
@@ -93,9 +99,66 @@ GROUPS: dict[str, dict[str, Any]] = {
             'geometry': 'orthogonal',
             'default_ratio': (1.0, 1.25, 1.5),
             'equal_to_a': (),
+            'default_angles': (90.0, 90.0, 90.0),
+            'fixed_angles': (90.0, 90.0, 90.0),
+        },
+    },
+    'monoclinic': {
+        'rotation_group': 'C2',
+        'rotation_axis': 'Y',
+        'sst_bases': {
+            # Unique axis b is represented by the y axis.  The two regions
+            # differ only by the sign of y and together form the proper FZ.
+            'improper': np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0],
+                                  [0.0, 1.0, 0.0]]),
+            'proper': np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0],
+                                [0.0, -1.0, 0.0]]),
+        },
+        'cell': {
+            'geometry': 'monoclinic',
+            'default_ratio': (1.0, 1.25, 1.5),
+            'equal_to_a': (),
+            'default_angles': (90.0, 105.0, 90.0),
+            'fixed_angles': (90.0, None, 90.0),
+        },
+    },
+    'triclinic': {
+        'rotation_group': 'C1',
+        'sst_bases': {
+            # With only inversion equivalence, an SST is one hemisphere.
+            'improper': np.array([[0.0, 0.0, 1.0]] * 3),
+            'proper': np.array([[0.0, 0.0, -1.0]] * 3),
+        },
+        'cell': {
+            'geometry': 'triclinic',
+            'default_ratio': (1.0, 1.25, 1.5),
+            'equal_to_a': (),
+            'default_angles': (75.0, 100.0, 110.0),
+            'fixed_angles': (None, None, None),
+        },
+    },
+    'trigonal': {
+        'rotation_group': 'D3',
+        'sst_bases': {
+            # A 60 degree azimuthal wedge in the upper/lower hemisphere.
+            'improper': np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0],
+                                  [np.sqrt(3.0), -1.0, 0.0]]),
+            'proper': np.array([[0.0, 0.0, -1.0], [0.0, 1.0, 0.0],
+                                [np.sqrt(3.0), -1.0, 0.0]]),
+        },
+        'cell': {
+            'geometry': 'rhombohedral',
+            'default_ratio': (1.0, 1.0, 1.0),
+            'equal_to_a': ('b', 'c'),
+            'default_angles': (75.0, 75.0, 75.0),
+            'fixed_angles': (None, None, None),
         },
     },
 }
+
+# Rhombohedral is the lattice name customarily used for the trigonal crystal
+# system.  Keep one canonical registry entry so both names behave identically.
+LATTICE_ALIASES = {'rhombohedral': 'trigonal'}
 
 
 def _orthogonal_cell(a: float, b: float, c: float) -> np.ndarray:
@@ -126,14 +189,39 @@ def _hexagonal_cell(a: float, c: float) -> np.ndarray:
     return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
 
 
+def _parallelepiped_cell(a: float, b: float, c: float,
+                         alpha: float, beta: float, gamma: float) -> np.ndarray:
+    """Return centered edges of a cell defined by lengths and angles in degrees."""
+    alpha, beta, gamma = np.deg2rad((alpha, beta, gamma))
+    cos_alpha, cos_beta, cos_gamma = np.cos((alpha, beta, gamma))
+    sin_gamma = np.sin(gamma)
+    c_y = c * (cos_alpha - cos_beta * cos_gamma) / sin_gamma
+    c_z_squared = c*c - (c*cos_beta)**2 - c_y*c_y
+    if c_z_squared <= 0.0:
+        raise ValueError('lattice angles do not define a valid unit cell')
+    vectors = np.array([
+        [a, 0.0, 0.0],
+        [b * cos_gamma, b * sin_gamma, 0.0],
+        [c * cos_beta, c_y, np.sqrt(c_z_squared)],
+    ])
+    vertices = np.array([
+        (sx * vectors[0] + sy * vectors[1] + sz * vectors[2]) / 2.0
+        for sx in (-1.0, 1.0) for sy in (-1.0, 1.0) for sz in (-1.0, 1.0)
+    ])
+    connections = ((0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
+                   (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7))
+    return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
+
+
 
 class Symmetry:
     """Material symmetry identified by a human-readable lattice name."""
 
     def __init__(self, symmetry: str | None = None) -> None:
         self.lattice: str | None
-        if isinstance(symmetry, str) and symmetry.lower() in GROUPS:
-            self.lattice = symmetry.lower()
+        lattice = LATTICE_ALIASES.get(symmetry.lower(), symmetry.lower()) if isinstance(symmetry, str) else None
+        if lattice in GROUPS:
+            self.lattice = lattice
         else:
             self.lattice = None
 
@@ -153,7 +241,9 @@ class Symmetry:
         """Return the proper symmetry rotations, with identity at index zero."""
         # Generate all symmetry-equivalent rotation operations
         config = GROUPS.get(self.lattice) if self.lattice is not None else None
-        operations = (Rotation.create_group(config['rotation_group']) if config is not None else Rotation.identity(1))
+        operations = (Rotation.create_group(
+            config['rotation_group'], axis=config.get('rotation_axis', 'Z')
+        ) if config is not None else Rotation.identity(1))
         # SciPy's cubic group does not start with identity, but callers rely on
         # operations[0] being the rotation that leaves vectors unchanged.
         identity = int(np.argmin(operations.magnitude()))
@@ -165,7 +255,9 @@ class Symmetry:
             operations = operations[np.atleast_1d(who)]
         return operations
 
-    def unitCell(self, *, a: float = 1.0, b: float | None = None, c: float | None = None) -> np.ndarray | list[list[None]]:
+    def unitCell(self, *, a: float = 1.0, b: float | None = None,
+                 c: float | None = None, alpha: float | None = None,
+                 beta: float | None = None, gamma: float | None = None) -> np.ndarray | list[list[None]]:
         """Return centered unit-cell edges as ``[x1, y1, z1, x2, y2, z2]``.
 
         The defaults are illustrative proportions for plotting. Supply positive
@@ -186,8 +278,23 @@ class Symmetry:
         for axis in cellConfig['equal_to_a']:
             if not np.isclose(a, axisValues[axis]):
                 raise ValueError(f'{self.lattice} requires a = {axis}')
+        default_angles = cellConfig.get('default_angles', (90.0, 90.0, 90.0))
+        angles = np.asarray(tuple(
+            default if value is None else value
+            for value, default in zip((alpha, beta, gamma), default_angles)
+        ), dtype=float)
+        if not np.all(np.isfinite(angles)) or np.any((angles <= 0.0) | (angles >= 180.0)):
+            raise ValueError('lattice angles must be finite and between 0 and 180 degrees')
+        for angle, required, name in zip(angles, cellConfig.get('fixed_angles', (None,) * 3),
+                                         ('alpha', 'beta', 'gamma')):
+            if required is not None and not np.isclose(angle, required):
+                raise ValueError(f'{self.lattice} requires {name} = {required}')
+        if cellConfig['geometry'] == 'rhombohedral' and not np.allclose(angles, angles[0]):
+            raise ValueError('trigonal requires alpha = beta = gamma')
         if cellConfig['geometry'] == 'hexagonal':
             return _hexagonal_cell(a, c)
+        if cellConfig['geometry'] in {'monoclinic', 'triclinic', 'rhombohedral'}:
+            return _parallelepiped_cell(a, b, c, *angles)
         return _orthogonal_cell(a, b, c)
 
 
@@ -197,11 +304,12 @@ class Symmetry:
 
 
     def inFZ(self, R: Rotation | np.ndarray) -> bool:
-        """Return whether a Rodrigues vector lies in the fundamental zone."""
+        """Return whether a Rodrigues vector lies in the fundamental zone (FZ)"""
         if isinstance(R, Rotation):
             R = as_rodrigues(R)
+        raw_rodrigues = np.asarray(R, dtype=float)
         # fundamental zone in Rodrigues space is point symmetric around origin
-        R = abs(R)
+        R = abs(raw_rodrigues)
         if self.lattice == 'cubic':
             limit = math.sqrt(2.0) - 1.0
             return bool(
@@ -223,6 +331,15 @@ class Symmetry:
             )
         if self.lattice == 'orthorhombic':
             return bool(1.0 >= R[0] and 1.0 >= R[1] and 1.0 >= R[2])
+        if self.lattice in {'monoclinic', 'triclinic', 'trigonal'}:
+            # The Voronoi region of identity is the fundamental zone for
+            # these lower-symmetry proper rotation groups.
+            magnitude = np.linalg.norm(raw_rodrigues)
+            rotation = (Rotation.from_rotvec(
+                2.0 * math.atan(magnitude) * raw_rodrigues / magnitude
+            ) if magnitude else Rotation.identity())
+            magnitudes = (rotation * self.symmetryQuats()).magnitude()
+            return bool(magnitudes[0] <= np.min(magnitudes) + 1e-12)
         return True
 
 
@@ -270,9 +387,17 @@ class Symmetry:
                 if not np.any(inSST):
                     theComponents = np.dot(basis['proper'], v)
             else:
-                # z component projects identical for positive and negative values
-                v[2] = abs(v[2])
                 theComponents = np.dot(basis['improper'], v)
+                inSST = np.all(theComponents >= 0.0, axis=0)
+                oppositeComponents = np.dot(basis['improper'], -v)
+                oppositeSST = np.all(oppositeComponents >= 0.0, axis=0)
+                if np.ndim(inSST) == 0:
+                    if not inSST and oppositeSST:
+                        theComponents = oppositeComponents
+                else:
+                    useOpposite = ~inSST & oppositeSST
+                    theComponents[:, useOpposite] = oppositeComponents[:, useOpposite]
+                inSST = inSST | oppositeSST
             inSST = np.all(theComponents >= 0.0, axis=0)
         # have to return color array
         if color:

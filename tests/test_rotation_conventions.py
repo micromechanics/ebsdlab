@@ -107,6 +107,9 @@ def test_symmetry_groups_start_with_identity():
         "hexagonal": 12,
         "tetragonal": 8,
         "orthorhombic": 4,
+        "monoclinic": 2,
+        "triclinic": 1,
+        "trigonal": 6,
     }
 
     for lattice, size in expected_sizes.items():

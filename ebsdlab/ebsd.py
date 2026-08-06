@@ -1051,11 +1051,11 @@ class EBSD:
             ax.plot([size, imgDim-size],
                     [center+size, center+size], 'k--', lw=1)
             # plt.colorbar()
+        ax.set_aspect('equal', adjustable='box')
         ax.set_xlim([-1, 1])
         ax.set_ylim([-1, 1])
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.axis('equal')
         ax.axis('off')
         print('Duration plotPF: ', int(np.round(time.time()-startTime)), 'sec')
         if fileName == None:

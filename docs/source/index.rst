@@ -35,6 +35,7 @@ Table of Contents
    installation
    ebsd
    symmetry
+   howto/index
    orientation
    verification
    api

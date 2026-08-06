@@ -5,9 +5,10 @@ Tutorial for Symmetry
 =====================
 
 The :class:`~ebsdlab.symmetry.Symmetry` class uses lattice names:
-``cubic``, ``hexagonal``, ``tetragonal``, and ``orthorhombic``. Internally,
+``cubic``, ``hexagonal``, ``tetragonal``, ``orthorhombic``, ``monoclinic``,
+``triclinic``, and ``trigonal`` (also accepted as ``rhombohedral``). Internally,
 SciPy represents their proper rotational symmetries by the point-group codes
-``O``, ``D6``, ``D4``, and ``D2``. These SciPy groups are rotation groups, not crystallographic
+``O``, ``D6``, ``D4``, ``D2``, ``C2``, ``C1``, and ``D3``. These SciPy groups are rotation groups, not crystallographic
 space groups.
 
 This example teaches the fundamentals of crystallography and shows how to determine if a vector lies within the standard stereographic triangle (SST) and retrieve its corresponding color for an Inverse Pole Figure (IPF) map.
@@ -50,11 +51,18 @@ Its defaults are chosen to make the lattice shape clear in plots;
 they are not material-specific lattice parameters, as those differ from one material to the next. Cubic cells use
 ``a = b = c = 1``; tetragonal and hexagonal cells use ``a = b = 1`` and
 ``c = 1.5``; orthorhombic cells use ``a = 1``, ``b = 1.25``, and ``c = 1.5``.
+Monoclinic and triclinic defaults use the latter unequal lengths, while
+trigonal uses a rhombohedral cell with equal unit-length edges.
 Positive lattice constants can be supplied when required:
 
 .. code-block:: python
 
     cell = Symmetry('orthorhombic').unitCell(a=2.0, b=3.0, c=4.0)
+
+For non-orthogonal cells, pass conventional angles in degrees as ``alpha``,
+``beta``, and ``gamma``. Monoclinic cells use the unique-``b`` setting
+(``alpha = gamma = 90``); rhombohedral trigonal cells require equal lengths
+and equal angles.
 
 For detailed API documentation, refer to
 :class:`~ebsdlab.symmetry.Symmetry`.

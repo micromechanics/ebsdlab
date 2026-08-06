@@ -19,6 +19,19 @@ Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in s
   - some educational plotting
   - examples and lots of documentation
 
+## Design scope
+`ebsdlab` analyzes already indexed EBSD orientation data for known phases. It is
+not intended to index raw Kikuchi patterns, identify phases from diffraction
+patterns, or simulate EBSD patterns.
+
+Accordingly, it models the rotational crystal symmetry required for orientation
+analysis, not complete atomistic crystal structures. Atomic basis positions,
+lattice centering, structure factors, and translational space-group operations
+such as glide planes and screw axes are out of scope. These details become
+necessary for phase identification, pattern simulation, or distinguishing
+closely related crystal structures, but not for orientation maps, IPF colors,
+misorientation, KAM, or pole-figure analysis of a known phase.
+
 ## Example
 EBSD-Inverse Pole Figure (IPF) of polycrystalline Copper with corresponding Pole Figure
 <table>

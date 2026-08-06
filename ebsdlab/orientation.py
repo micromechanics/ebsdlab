@@ -411,7 +411,10 @@ class Orientation:
                     ax.text(x_+0.05, y_+0.05, label_)
 
         # finalize plot
-        ax.axis('equal')
+        if self.plot2D == '3D':
+            ax.axis('equal')
+        else:
+            ax.set_aspect('equal', adjustable='box')
         ax.axis('off')
         ax.set_xlim([-scale*1.1, scale*1.1])
         ax.set_ylim([-scale*1.1, scale*1.1])

@@ -108,8 +108,8 @@ This example demonstrates how to iterate through all symmetrically equivalent di
   2. We create an orientation that we are interested in (we print it to verify it)
   3. We use a helping orientation which we use to iterate over its quaternions / directions (we print it for verification).
   4. Obtain an equivalent crystal axis of the helper-orientation
-  3. Calculate the sample direction  by transforming using orientation 'o'
-  4. Let's print the equivalent crystal axis and its transformed version
+  5. Calculate the sample direction by transforming using orientation 'o'.
+  6. Print the equivalent crystal axis and its transformed version.
 
 .. jupyter-execute::
 
