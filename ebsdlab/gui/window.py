@@ -12,11 +12,9 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox,
                                QMessageBox, QPushButton, QSpinBox, QSplitter,
                                QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
-from ..ebsd import EBSD
+from ..ebsd import EBSD, SUPPORTED_SUFFIXES
 from .widgets import RangeSelector
 
-
-SUPPORTED_SUFFIXES = {'.ang', '.osc', '.txt', '.crc'}
 
 
 class EBSDGui(QMainWindow):

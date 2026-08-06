@@ -1,8 +1,31 @@
 #!/usr/bin/python3
 """TEST EBSD class """
 from pathlib import Path
+import numpy as np
 import pytest
-from ebsdlab.ebsd import EBSD
+from ebsdlab.ebsd import EBSD, SUPPORTED_SUFFIXES
+
+
+DATA_DIR = Path(__file__).parent/'DataFiles'
+
+
+@pytest.mark.parametrize('data_file',
+    sorted(path for path in DATA_DIR.rglob('*') if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES),
+    ids=lambda path: path.name)
+def test_all_supported_data_files_load(data_file):
+    """Every supported fixture shipped with the tests can be opened."""
+    ebsd = EBSD(str(data_file))
+    assert len(ebsd.x) > 0
+    assert len(ebsd.quaternions) == len(ebsd.x)
+
+
+def test_osc_ipf_with_manually_supplied_symmetry():
+    """OSC maps can use an explicitly supplied phase symmetry for IPF colors."""
+    ebsd = EBSD(str(DATA_DIR/'EBSD.osc'), symmetry='cubic')
+    ebsd.plotIPF(show=False)
+
+    assert repr(ebsd.sym[0]) == 'cubic'
+    assert np.any(np.asarray(ebsd.image))
 
 
 @pytest.mark.mpl_image_compare

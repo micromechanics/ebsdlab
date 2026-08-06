@@ -20,6 +20,8 @@ from ._rotation import as_bunge_eulers, as_rodrigues
 from .orientation import Orientation
 from .symmetry import Symmetry
 
+SUPPORTED_SUFFIXES = {'.ang', '.osc', '.txt', '.crc'}
+
 
 class EBSD:
     """Class to allow for read EBSD data.
@@ -30,7 +32,7 @@ class EBSD:
     ##
     # @name INPUT METHODS
     # @{
-    def __init__(self, fileName):
+    def __init__(self, fileName, symmetry=None):
         """
         read input file <br>
         initialize things<br>
@@ -39,6 +41,8 @@ class EBSD:
 
         Args:
            fileName: file name in the present directory
+           symmetry: optional crystal symmetry name or :class:`Symmetry` object.
+               When supplied, it overrides symmetry read from the file.
         """
         # initialize
         self.meta = None
@@ -80,6 +84,10 @@ class EBSD:
         else:
             print('This file-extension is not implemented yet')
             sys.exit(2)
+
+        if symmetry is not None:
+            self.sym = [symmetry if isinstance(symmetry, Symmetry)
+                        else Symmetry(symmetry)]
 
         # basic tests
         if self.stepSizeY is None:
@@ -312,38 +320,35 @@ class EBSD:
             self.fileName = fileName
         print('Load .osc file: ', self.fileName)
 
-        def find_subsequence(seq, subseq):
-            target = np.dot(subseq, subseq)
-            candidates = np.where(np.correlate(
-                seq, subseq, mode='valid') == target)[0]
-            # some of the candidates entries may be false positives, double check
-            check = candidates[:, np.newaxis] + np.arange(len(subseq))
-            mask = np.all((np.take(seq, check) == subseq), axis=-1)
-            return candidates[mask]
+        # OSC stores its numeric values as little-endian 32-bit values.  Using
+        # NumPy's platform-sized ``float`` (normally float64) desynchronizes the
+        # reader after the first step-size field.
+        start_bytes = bytes.fromhex('B9 0B EF FF 02 00 00 00')
+        raw = Path(self.fileName).read_bytes()
+        header = np.frombuffer(raw, dtype='<u4', count=8)
+        n = int(header[6])  # number of data points
+        start_pos = raw.find(start_bytes)
+        if start_pos < 0:
+            raise ValueError('OSC data-block marker was not found.')
 
-        f = open(self.fileName)
-        header = np.fromfile(f, dtype=np.uint32, count=8)
-        n = header[6]  # number of data points
+        data_offset = start_pos + len(start_bytes)
+        data_size = n * 10 * np.dtype('<f4').itemsize
+        remaining = len(raw) - data_offset
+        if remaining == data_size + 8:
+            # Current format: x and y step sizes directly precede the records.
+            pass
+        elif remaining == data_size + 12:
+            # Older format: a uint32 record-size/count field precedes them.
+            data_offset += 4
+        else:
+            raise ValueError(
+                f'Unexpected OSC data-block size: expected {data_size + 8} or '
+                f'{data_size + 12} bytes after the marker, found {remaining}.')
 
-        # find start position by using startByte-pattern
-        bufferLength = int(math.pow(2, 20))
-        startBytes = np.array([int(i, 16) for i in [
-                              'B9', '0B', 'EF', 'FF', '02', '00', '00', '00']], dtype=np.uint8)
-        startPos = 0
-        f.seek(startPos)
-        startData = np.fromfile(f, dtype=np.uint8, count=bufferLength)
-        startPos += find_subsequence(startData, startBytes)[0]
-        f.seek(startPos+8)
-
-        # there are different osc file versions, one does have some count of data, the other proceeds with xStep and yStep (!=1)
-        dn = np.double(np.fromfile(f, dtype=np.uint32, count=1))
-        if round(((dn/4-2)/10)/n) != 1:
-            f.seek(startPos+8)
-        self.stepSizeX = np.double(np.fromfile(f, dtype=float, count=1))
-        self.stepSizeY = np.double(np.fromfile(f, dtype=float, count=1))
-
-        data = np.reshape(np.double(np.fromfile(
-            f, count=n*10, dtype=float)), (n, 10))
+        self.stepSizeX, self.stepSizeY = np.frombuffer(
+            raw, dtype='<f4', count=2, offset=data_offset).astype(float)
+        data = np.frombuffer(raw, dtype='<f4', count=n*10,
+                             offset=data_offset + 8).reshape(n, 10)
         self.phi1 = data[:, 0].astype(np.float16)
         self.PHI = data[:, 1].astype(np.float16)
         self.phi2 = data[:, 2].astype(np.float16)
@@ -357,7 +362,6 @@ class EBSD:
         self.width = max(self.x)
         self.height = max(self.y)
         self.ratio = self.width/self.height
-        f.close()
         del data
         return
 

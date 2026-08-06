@@ -11,6 +11,23 @@ The ``EBSD.quaternions`` attribute is a vector of
 point.
 
 
+Provide phase symmetry manually
+-------------------------------
+
+When a file does
+not contain readable phase-symmetry metadata, supply it while opening the map:
+
+.. code-block:: python
+
+   from ebsdlab.ebsd import EBSD
+
+   e = EBSD("measurement.osc", symmetry="cubic")
+   e.plotIPF()
+
+``symmetry`` accepts a lattice name supported by ``Symmetry`` (such as
+``"cubic"``), or an existing ``Symmetry``.
+
+
 Example: Read EBSD data and plot the ND IPF
 -------------------------------------------
 
