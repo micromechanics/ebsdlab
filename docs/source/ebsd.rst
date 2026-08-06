@@ -45,7 +45,7 @@ Let's looking at inverse pole figure (IPF) in normal direction (ND) and pole-fig
    from ebsdlab.ebsd import EBSD
    e = EBSD("../tests/DataFiles/EBSD.ang")
    print('\nPlot confidence index:')
-   e.plot(e.CI)
+   e.plot(e.ci)
    print('\nPlot default IPF:')
    e.plotIPF()
    print('\nSame plot as before but with scale bar:')
@@ -67,7 +67,7 @@ The following table shows details that can improve / modify the plots.
 
           #Plot confidence index (CI) with CI mask:
           e.maskCI(0.1)
-          e.plot(e.CI)
+          e.plot(e.ci)
      - .. image:: /_static/test_ebsd_ci_mask.png
    * - .. code-block:: python
 
@@ -98,10 +98,10 @@ Data that exists and can be used for plotting in plot
 
 - OIM software:
 
-  - e.phi1, e.PHI, e.phi2 : Euler angles saved as quaternions
+  - e.phi1, e.phi, e.phi2 : Euler angles saved as quaternions
   - e.x, e.y : x,y coordinates
-  - e.IQ, e.CI, e.phaseID : Image Quality, confidence index (bad=0 ... good=1), phase id
-  - e.SEMsignal : SEM signal
+  - e.iq, e.ci, e.phaseID : Image Quality, confidence index (bad=0 ... good=1), phase id
+  - e.semSignal : SEM signal
   - e.fit :
 
 - Oxford:

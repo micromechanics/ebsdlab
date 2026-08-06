@@ -15,7 +15,7 @@ from matplotlib import colors
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 from scipy.interpolate import griddata
 from scipy.spatial.transform import Rotation
-from ._rotation import as_bunge_eulers, as_rodrigues
+from ._rotation import asBungeEulers, asRodrigues
 from .orientation import Orientation
 from .symmetry import Symmetry
 
@@ -46,14 +46,14 @@ class EBSD:
         # initialize
         self.meta = None
         self.phi1 = None
-        self.PHI = None
+        self.phi = None
         self.phi2 = None
         self.y = None
-        self.IQ = None
+        self.iq = None
         self.width = None
-        self.CI = None
+        self.ci = None
         self.phaseID = None
-        self.SEMsignal = None
+        self.semSignal = None
         self.fit = None
         self.height = None
         self.height = None
@@ -103,15 +103,15 @@ class EBSD:
             return
 
         # convert into quaternions and only use that
-        eulers = np.vstack((self.phi1, self.PHI, self.phi2))
+        eulers = np.vstack((self.phi1, self.phi, self.phi2))
         self.quaternions = Rotation.from_euler('ZXZ', eulers.T)
         del self.phi1
-        del self.PHI
+        del self.phi
         del self.phi2
 
         # for plotting: determine image and imageSize once, use multiple times
         self.image = None
-        self.mask = self.CI > -1  # all are visible initially
+        self.mask = self.ci > -1  # all are visible initially
         self.vMask = np.ones_like(self.x, dtype=bool)
         self.periodicLen = np.where((self.x[1:]-self.x[:-1]) < 0)[0][0]+1
         print('   Duration init: ', int(np.round(time.time()-startTime)), 'sec')
@@ -150,14 +150,14 @@ class EBSD:
         # read data: print "Reading file, this can take a bit..."
         data = np.loadtxt(fileHandle)
         self.phi1 = data[:, 0].astype(float)
-        self.PHI = data[:, 1].astype(float)
+        self.phi = data[:, 1].astype(float)
         self.phi2 = data[:, 2].astype(float)
         self.x = data[:, 3].astype(float)
         self.y = data[:, 4].astype(float)
-        self.IQ = data[:, 5].astype(float)
-        self.CI = data[:, 6].astype(float)
+        self.iq = data[:, 5].astype(float)
+        self.ci = data[:, 6].astype(float)
         self.phaseID = data[:, 7].astype(np.uint8)
-        self.SEMsignal = data[:, 8].astype(np.uint8)
+        self.semSignal = data[:, 8].astype(np.uint8)
         self.fit = data[:, 9].astype(float)
         self.width = max(self.x)
         self.height = max(self.y)
@@ -224,15 +224,15 @@ class EBSD:
                 self.mask[idx] = True
                 self.phi1[idx] = data[i,
                                       foundKeys['phi1,'] - 1].astype(np.float16)
-                self.PHI[idx] = data[i, foundKeys['phi1,'] -
+                self.phi[idx] = data[i, foundKeys['phi1,'] -
                                      0].astype(np.float16)
                 self.phi2[idx] = data[i,
                                       foundKeys['phi1,'] + 1].astype(np.float16)
                 if 'IQ' in foundKeys:
-                    self.IQ[idx] = data[i, foundKeys['IQ'] -
+                    self.iq[idx] = data[i, foundKeys['IQ'] -
                                         1].astype(np.float16)
                 if 'CI' in foundKeys:
-                    self.CI[idx] = data[i, foundKeys['CI'] -
+                    self.ci[idx] = data[i, foundKeys['CI'] -
                                         1].astype(np.float16)
                 if 'Fit' in foundKeys:
                     self.fit[idx] = data[i, foundKeys['Fit'] -
@@ -241,7 +241,7 @@ class EBSD:
                     self.phaseID[idx] = data[i,
                                              foundKeys['Phase'] - 1].astype(np.float16)
                 if 'sem' in foundKeys:
-                    self.SEMsignal[idx] = data[i,
+                    self.semSignal[idx] = data[i,
                                                foundKeys['sem'] - 1].astype(np.float16)
                 if 'Grain' in foundKeys:
                     self.grainID[idx] = data[i,
@@ -250,21 +250,21 @@ class EBSD:
         else:  # read new
             self.mask = True
             self.phi1 = data[:, foundKeys['phi1,'] - 1].astype(np.float16)
-            self.PHI = data[:, foundKeys['phi1,'] - 0].astype(np.float16)
+            self.phi = data[:, foundKeys['phi1,'] - 0].astype(np.float16)
             self.phi2 = data[:, foundKeys['phi1,'] + 1].astype(np.float16)
             self.x = data[:, foundKeys['x,'] - 1].astype(float)
             self.y = data[:, foundKeys['x,'] - 0].astype(float)
             if 'IQ' in foundKeys:
-                self.IQ = data[:, foundKeys['IQ'] - 1].astype(np.float16)
+                self.iq = data[:, foundKeys['IQ'] - 1].astype(np.float16)
             if 'CI' in foundKeys:
-                self.CI = data[:, foundKeys['CI'] - 1].astype(np.float16)
+                self.ci = data[:, foundKeys['CI'] - 1].astype(np.float16)
             if 'Fit' in foundKeys:
                 self.fit = data[:, foundKeys['Fit'] - 1].astype(np.float16)
             if 'Phase' in foundKeys:
                 self.phaseID = data[:,
                                     foundKeys['Phase'] - 1].astype(np.float16)
             if 'sem' in foundKeys:
-                self.SEMsignal = data[:,
+                self.semSignal = data[:,
                                       foundKeys['sem'] - 1].astype(np.float16)
             self.mask = np.ones_like(self.x, dtype=bool)
             self.width = max(self.x)
@@ -299,9 +299,9 @@ class EBSD:
         fileOut.write('# khlFamilies 3 1 1 1 0.0\n')
         fileOut.write('#\n# GRID: HexGrid\n#\n')
         for i in range(len(self.x)):
-            phi1, PHI, phi2 = tuple(as_bunge_eulers(self.quaternions[i]))
+            phi1, phi, phi2 = tuple(asBungeEulers(self.quaternions[i]))
             fileOut.write(' %8.5f %8.5f %8.5f %12.5f %12.5f %8.3f %6.3f %2d %6d %7.3f\n' %
-                          (phi1, PHI, phi2, self.x[i], self.y[i], self.IQ[i], self.CI[i], self.phaseID[i], self.SEMsignal[i], self.fit[i]))
+                          (phi1, phi, phi2, self.x[i], self.y[i], self.iq[i], self.ci[i], self.phaseID[i], self.semSignal[i], self.fit[i]))
         fileOut.close()
         print('Duration writeANG: ', int(
             np.round(time.time()-startTime)), 'sec')
@@ -321,41 +321,41 @@ class EBSD:
         # OSC stores its numeric values as little-endian 32-bit values.  Using
         # NumPy's platform-sized ``float`` (normally float64) desynchronizes the
         # reader after the first step-size field.
-        start_bytes = bytes.fromhex('B9 0B EF FF 02 00 00 00')
+        startBytes = bytes.fromhex('B9 0B EF FF 02 00 00 00')
         raw = Path(self.fileName).read_bytes()
         header = np.frombuffer(raw, dtype='<u4', count=8)
         n = int(header[6])  # number of data points
-        start_pos = raw.find(start_bytes)
-        if start_pos < 0:
+        startPosition = raw.find(startBytes)
+        if startPosition < 0:
             raise ValueError('OSC data-block marker was not found.')
 
-        data_offset = start_pos + len(start_bytes)
-        data_size = n * 10 * np.dtype('<f4').itemsize
-        remaining = len(raw) - data_offset
-        if remaining == data_size + 8:
+        dataOffset = startPosition + len(startBytes)
+        dataSize = n * 10 * np.dtype('<f4').itemsize
+        remaining = len(raw) - dataOffset
+        if remaining == dataSize + 8:
             # Current format: x and y step sizes directly precede the records.
             pass
-        elif remaining == data_size + 12:
+        elif remaining == dataSize + 12:
             # Older format: a uint32 record-size/count field precedes them.
-            data_offset += 4
+            dataOffset += 4
         else:
             raise ValueError(
-                f'Unexpected OSC data-block size: expected {data_size + 8} or '
-                f'{data_size + 12} bytes after the marker, found {remaining}.')
+                f'Unexpected OSC data-block size: expected {dataSize + 8} or '
+                f'{dataSize + 12} bytes after the marker, found {remaining}.')
 
         self.stepSizeX, self.stepSizeY = np.frombuffer(
-            raw, dtype='<f4', count=2, offset=data_offset).astype(float)
+            raw, dtype='<f4', count=2, offset=dataOffset).astype(float)
         data = np.frombuffer(raw, dtype='<f4', count=n*10,
-                             offset=data_offset + 8).reshape(n, 10)
+                             offset=dataOffset + 8).reshape(n, 10)
         self.phi1 = data[:, 0].astype(np.float16)
-        self.PHI = data[:, 1].astype(np.float16)
+        self.phi = data[:, 1].astype(np.float16)
         self.phi2 = data[:, 2].astype(np.float16)
         self.x = data[:, 3].astype(float)
         self.y = data[:, 4].astype(float)
-        self.IQ = data[:, 5].astype(np.float16)
-        self.CI = data[:, 6].astype(np.float16)
+        self.iq = data[:, 5].astype(np.float16)
+        self.ci = data[:, 6].astype(np.float16)
         self.phaseID = data[:, 7].astype(np.float16)
-        self.SEMsignal = data[:, 8].astype(np.float16)  # SEMSignal
+        self.semSignal = data[:, 8].astype(np.float16)  # SEMSignal
         self.fit = data[:, 9].astype(np.float16)  # Fit
         self.width = max(self.x)
         self.height = max(self.y)
@@ -442,33 +442,33 @@ class EBSD:
         # print columnType
 
         # coordinates
-        x_ = np.arange(xcells)*self.stepSizeX
-        y_ = np.arange(ycells)*self.stepSizeY
-        self.x, self.y = np.meshgrid(x_, y_)
+        xCoordinates = np.arange(xcells)*self.stepSizeX
+        yCoordinates = np.arange(ycells)*self.stepSizeY
+        self.x, self.y = np.meshgrid(xCoordinates, yCoordinates)
         self.x, self.y = self.x.flatten(), self.y.flatten()
 
         # read data from crcFile
         crcFile = open(self.fileName, 'rb')
         self.phaseID = np.zeros((numDataPoints), dtype=np.uint8)
-        self.BC, self.BS, self.Bands, self.Error = np.zeros_like(self.phaseID), np.zeros_like(
+        self.bc, self.bs, self.bands, self.error = np.zeros_like(self.phaseID), np.zeros_like(
             self.phaseID), np.zeros_like(self.phaseID), np.zeros_like(self.phaseID)
         self.phi1 = np.zeros((numDataPoints), dtype=float)
-        self.PHI, self.phi2, self.CI, self.RI = np.zeros_like(self.phi1), np.zeros_like(
+        self.phi, self.phi2, self.ci, self.ri = np.zeros_like(self.phi1), np.zeros_like(
             self.phi1), np.zeros_like(self.phi1), np.zeros_like(self.phi1)
-        self.IQ, self.SEMsignal, self.fit = np.zeros_like(
+        self.iq, self.semSignal, self.fit = np.zeros_like(
             self.phi1), np.zeros_like(self.phi1), np.zeros_like(self.phi1)
         for i in range(numDataPoints):
             self.phaseID[i] = struct.unpack('B', crcFile.read(1))[0]
             self.phi1[i] = struct.unpack('f', crcFile.read(4))[0]
-            self.PHI[i] = struct.unpack('f', crcFile.read(4))[0]
+            self.phi[i] = struct.unpack('f', crcFile.read(4))[0]
             self.phi2[i] = struct.unpack('f', crcFile.read(4))[0]
-            self.CI[i] = struct.unpack('f', crcFile.read(4))[0]
-            self.BC[i] = struct.unpack('B', crcFile.read(1))[0]
-            self.BS[i] = struct.unpack('B', crcFile.read(1))[0]
-            self.Bands[i] = struct.unpack('B', crcFile.read(1))[0]
-            self.Error[i] = struct.unpack('B', crcFile.read(1))[0]
+            self.ci[i] = struct.unpack('f', crcFile.read(4))[0]
+            self.bc[i] = struct.unpack('B', crcFile.read(1))[0]
+            self.bs[i] = struct.unpack('B', crcFile.read(1))[0]
+            self.bands[i] = struct.unpack('B', crcFile.read(1))[0]
+            self.error[i] = struct.unpack('B', crcFile.read(1))[0]
             if 'ReliabilityIndex' in columnNames:
-                self.RI[i] = struct.unpack('f', crcFile.read(4))[0]
+                self.ri[i] = struct.unpack('f', crcFile.read(4))[0]
         crcFile.close()
         if not len(self.sym) == np.max(self.phaseID)-np.min(self.phaseID)+1:
             print('ERRRO in reading CRC: symmetries do not match', len(
@@ -483,36 +483,36 @@ class EBSD:
         if '|' in rotation:
             rotation = [float(i) for i in rotation.split('|')]
             if len(rotation) == 3:
-                phi1, PHI, phi2 = np.radians(rotation)
+                phi1, phi, phi2 = np.radians(rotation)
             elif len(rotation) == 4:
-                phi1, PHI, phi2 = np.radians(rotation[:3])
+                phi1, phi, phi2 = np.radians(rotation[:3])
                 distrib = rotation[-1]
             elif len(rotation) == 5:
-                phi1, PHI, phi2 = np.radians(rotation[:3])
+                phi1, phi, phi2 = np.radians(rotation[:3])
                 distrib, numPerAxis = rotation[-2:]
             else:
                 print('ERROR')
                 return
-            print('   Euler angles:', np.round(phi1, 2), np.round(PHI, 2), np.round(phi2, 2),
+            print('   Euler angles:', np.round(phi1, 2), np.round(phi, 2), np.round(phi2, 2),
                   '| distribution:', distrib, '| numberPerAxis:', numPerAxis)
         else:
-            phi1, PHI, phi2 = 0, 0, 0
+            phi1, phi, phi2 = 0, 0, 0
         if distrib < 0.001:
             distrib = 0.001
         self.sym.append(Symmetry('cubic'))
         self.stepSizeX = 1.
         numDataPoints = int(numPerAxis**2)
-        x_ = np.arange(numPerAxis)*self.stepSizeX
-        self.x, self.y = np.meshgrid(x_, x_)
+        coordinates = np.arange(numPerAxis)*self.stepSizeX
+        self.x, self.y = np.meshgrid(coordinates, coordinates)
         self.x, self.y = self.x.flatten(), self.y.flatten()
         self.phaseID = np.ones((numDataPoints), dtype=np.uint8)
         self.phi1 = np.zeros((numDataPoints), dtype=float)+phi1 + \
             np.random.normal(loc=0, scale=distrib, size=numDataPoints)
-        self.PHI = np.zeros((numDataPoints), dtype=float)+PHI + \
+        self.phi = np.zeros((numDataPoints), dtype=float)+phi + \
             np.random.normal(loc=0, scale=distrib, size=numDataPoints)
         self.phi2 = np.zeros((numDataPoints), dtype=float)+phi2 + \
             np.random.normal(loc=0, scale=distrib, size=numDataPoints)
-        self.CI = np.ones((numDataPoints), dtype=float)
+        self.ci = np.ones((numDataPoints), dtype=float)
         self.stepSizeY = self.stepSizeX
         self.width = np.max(self.x)
         self.height = np.max(self.y)
@@ -525,28 +525,28 @@ class EBSD:
     # masked areas are plotted in black. Hence initially no point is part of the mask, i.e. all points are false
     # @{
 
-    def maskCI(self, CI):
+    def maskCI(self, ci):
         """
         masked all points off, which have a CI less than: good points=False, bad points=True
 
         Args:
            CI: critical CI
         """
-        self.mask = self.CI > CI
+        self.mask = self.ci > ci
         return
 
     def maskReset(self):
         """
         reset mask
         """
-        self.mask = self.CI > -1
+        self.mask = self.ci > -1
         return
 
     def removePointsOutsideMask(self):
         """
         set all data-points outside of mask to invalid such that after export to OIM, it will be read there as non-existing points
         """
-        self.CI[~self.mask] = -1.0
+        self.ci[~self.mask] = -1.0
         self.fit[~self.mask] = 180.0
         return
 
@@ -645,20 +645,20 @@ class EBSD:
             for nSQ in neighborSymQ:
                 candidate = symQ.inv()*misQ*nSQ
                 for theQ in (candidate.inv(), candidate):
-                    theQ_Rod = abs(as_rodrigues(theQ))
+                    theQRodrigues = abs(asRodrigues(theQ))
                     inFZ = np.logical_and(
                         np.logical_and(
-                            fzThreshold >= theQ_Rod[:, 0], fzThreshold >= theQ_Rod[:, 1]),
-                        np.logical_and(fzThreshold >= theQ_Rod[:, 2], 1.0 >= np.sum(theQ_Rod, axis=1)))
+                            fzThreshold >= theQRodrigues[:, 0], fzThreshold >= theQRodrigues[:, 1]),
+                        np.logical_and(fzThreshold >= theQRodrigues[:, 2], 1.0 >= np.sum(theQRodrigues, axis=1)))
                     angle = theQ.magnitude()
                     foundAngle[inFZ] = True
                     angles[inFZ, iNeighbor] = angle[inFZ]
-                    mask = self.CI[neighbors[:, iNeighbor]] == -1.0
+                    mask = self.ci[neighbors[:, iNeighbor]] == -1.0
                     angles[mask, iNeighbor] = np.nan
                 if np.all(foundAngle):
                     break  # stop looking for alternatives if filled already all
         self.kam = np.degrees(np.nanmean(angles, axis=1))
-        self.kam[self.CI == -1.0] = np.nan
+        self.kam[self.ci == -1.0] = np.nan
         print('Duration KAM evaluation: ', int(
             np.round(time.time()-startTime)), 'sec')
         return
@@ -799,11 +799,11 @@ class EBSD:
             equivQuaternions = sym.equivalentQuaternions(self.quaternions)
             for equivQuaternion in equivQuaternions:
                 pole = equivQuaternion.inv().apply(axis)
-                flags_, rgbs_ = sym.inSST(
+                remainingFlags, remainingRgbs = sym.inSST(
                     pole[~flags].T, color=True, proper=False)
-                if len(rgbs_.shape) == 2:
-                    rgbs[:, ~flags] = rgbs_
-                    flags[~flags] = flags_
+                if len(remainingRgbs.shape) == 2:
+                    rgbs[:, ~flags] = remainingRgbs
+                    flags[~flags] = remainingFlags
         fig = self.plotRGB(rgbs, widthPixel, interpolationType, fileName)
         print('Duration plotIPF: ', int(np.round(time.time()-startTime)), 'sec')
         if fileName == None and show:
@@ -883,7 +883,7 @@ class EBSD:
         iClose = np.argmin((self.x-x)**2 + (self.y-y)**2)
         iQuaternion = self.quaternions[iClose]
         print('Euler angles at point:',
-              np.round(as_bunge_eulers(iQuaternion, degrees=True), 1))
+              np.round(asBungeEulers(iQuaternion, degrees=True), 1))
         self.addUnitCellOverlay(ax, x, y, scale, colorCube)
         ax.set_xticks([])
         ax.set_yticks([])
@@ -1021,7 +1021,7 @@ class EBSD:
         for sym in self.sym:
             if sym.__repr__() == None:
                 continue
-            oHelp = Orientation(Eulers=np.array(
+            oHelp = Orientation(eulers=np.array(
                 [0., 0., 0.]), symmetry=sym.__repr__())
             axis = np.array(axis, dtype=float)
             axis /= np.linalg.norm(axis)
@@ -1066,9 +1066,9 @@ class EBSD:
                 zippedList = list(zip(-y, x))
             else:
                 return
-            for x_, y_ in zippedList:
-                ix = int((x_ - -1.) * center) + size
-                iy = int((y_ - -1.) * center) + size
+            for xCoordinate, yCoordinate in zippedList:
+                ix = int((xCoordinate - -1.) * center) + size
+                iy = int((yCoordinate - -1.) * center) + size
                 if 0 <= ix < imgDim and 0 <= iy < imgDim:
                     img[iy][ix] += 1
             img = ndi.gaussian_filter(

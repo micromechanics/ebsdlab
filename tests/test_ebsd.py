@@ -57,7 +57,7 @@ def test_file_extensions_are_case_insensitive_and_invalid_ones_raise(tmp_path):
 def test_ebsd_ci():
     dataDir = Path(__file__).parent/'DataFiles'
     e = EBSD(str(dataDir/'EBSD.ang'))
-    fig = e.plot(e.CI)
+    fig = e.plot(e.ci)
     return fig
 
 
@@ -66,7 +66,7 @@ def test_ebsd_ci_mask():
     dataDir = Path(__file__).parent/'DataFiles'
     e = EBSD(str(dataDir/'EBSD.ang'))
     e.maskCI(0.1)
-    fig = e.plot(e.CI)
+    fig = e.plot(e.ci)
     return fig
 
 

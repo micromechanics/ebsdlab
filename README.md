@@ -98,7 +98,7 @@ After that, the package can be imported and used in Python codes as
 ```python
 >>> from ebsdlab import EBSD
 >>> emap = EBSD("tests/DataFiles/EBSD.ang")
->>> emap.plot(emap.CI)
+>>> emap.plot(emap.ci)
 ```
 
 ### Graphical user interface

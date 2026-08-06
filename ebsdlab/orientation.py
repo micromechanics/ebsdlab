@@ -6,7 +6,7 @@
 #
 import numpy as np
 from scipy.spatial.transform import Rotation
-from ._rotation import as_bunge_eulers
+from ._rotation import asBungeEulers
 from .symmetry import Symmetry
 
 
@@ -21,7 +21,7 @@ class Orientation:
     def __init__(self,
                  quaternion=None,
                  matrix=None,
-                 Eulers=None,
+                 eulers=None,
                  # put any integer to have a fixed seed or True for real random
                  random=False,
                  symmetry=None,
@@ -33,8 +33,8 @@ class Orientation:
             else:
                 self.quaternion = Rotation.random(random_state=random)
         # based on given Euler angles
-        elif isinstance(Eulers, np.ndarray) and Eulers.shape == (3,):
-            self.quaternion = Rotation.from_euler('ZXZ', Eulers)
+        elif isinstance(eulers, np.ndarray) and eulers.shape == (3,):
+            self.quaternion = Rotation.from_euler('ZXZ', eulers)
         # based on given rotation matrix
         elif isinstance(matrix, np.ndarray):
             self.quaternion = Rotation.from_matrix(matrix)
@@ -66,7 +66,7 @@ class Orientation:
                  standardRange=False):
         if notation.lower() not in ('bunge', 'zxz'):
             raise ValueError("Only the Bunge/intrinsic ZXZ convention is supported")
-        return as_bunge_eulers(self.quaternion, degrees, standardRange)
+        return asBungeEulers(self.quaternion, degrees, standardRange)
     eulers = property(asEulers)
 
     def asMatrix(self):
@@ -99,7 +99,7 @@ class Orientation:
     # @name MATERIAL SPECIFIC ROUTINES
     # @{
 
-    def disorientation(self, other, SST=True):
+    def disorientation(self, other, sst=True):
         """Disorientation between myself and given other orientation.
 
         Rotation axis falls into SST if SST == True.
@@ -117,7 +117,7 @@ class Orientation:
             raise TypeError(
                 'disorientation between different symmetry classes not supported yet.')
         misQ = self.quaternion.inv()*other.quaternion
-        mySymQs = self.symmetry.symmetryQuats() if SST else self.symmetry.symmetryQuats()[
+        mySymQs = self.symmetry.symmetryQuats() if sst else self.symmetry.symmetryQuats()[
             :1]       # take all or only first sym operation
         otherSymQs = other.symmetry.symmetryQuats()
         for i, sA in enumerate(mySymQs):  # if not in SST: only one sA
@@ -125,7 +125,7 @@ class Orientation:
                 candidate = sA.inv()*misQ*sB
                 for k, theQ in enumerate((candidate.inv(), candidate)):
                     breaker = self.symmetry.inFZ(theQ) and (
-                        not SST or other.symmetry.inDisorientationSST(theQ))
+                        not sst or other.symmetry.inDisorientationSST(theQ))
                     if breaker:
                         break
                 if breaker:
@@ -136,7 +136,7 @@ class Orientation:
                 # disorientation, own sym, other sym, self-->other: True, self<--other: False
                 i, j, k == 1)
 
-    def inversePole(self, axis, proper=False, SST=True):
+    def inversePole(self, axis, proper=False, sst=True):
         """axis rotated according to orientation (using crystal symmetry to ensure location falls into SST)
 
         Args:
@@ -147,7 +147,7 @@ class Orientation:
         Returns:
           vector of axis
         """
-        if SST:                                                                                         # pole requested to be within SST
+        if sst:                                                                                         # pole requested to be within SST
             # test all symmetric equivalent quaternions
             for i, q in enumerate(self.symmetry.equivalentQuaternions(self.quaternion)):
                 # align crystal direction to axis
@@ -157,9 +157,9 @@ class Orientation:
         else:
             # align crystal direction to axis
             pole = self.quaternion.inv().apply(axis)
-        return (pole, i if SST else 0)
+        return (pole, i if sst else 0)
 
-    def IPFcolor(self, axis, proper=False):
+    def ipfColor(self, axis, proper=False):
         """color of inverse pole figure for given axis
 
         Args:
@@ -190,8 +190,8 @@ class Orientation:
           doi: 10.2514/1.28949
 
         Usage:
-          * a = Orientation(Eulers=np.radians([10, 10, 0]), symmetry='hexagonal')
-          * b = Orientation(Eulers=np.radians([20, 0, 0]),  symmetry='hexagonal')
+          * a = Orientation(eulers=np.radians([10, 10, 0]), symmetry='hexagonal')
+          * b = Orientation(eulers=np.radians([20, 0, 0]),  symmetry='hexagonal')
           * avg = Orientation.average([a,b])
 
         Args:
@@ -209,12 +209,12 @@ class Orientation:
             multiplicity = np.ones(count, dtype='i')
         # take first as reference
         reference = orientations[0]
-        closest_rotations = []
+        closestRotations = []
         for o in orientations:
-            closest = o.equivalentOrientations(reference.disorientation(o, SST=False)[2])[
+            closest = o.equivalentOrientations(reference.disorientation(o, sst=False)[2])[
                 0]             # select sym orientation with lowest misorientation
-            closest_rotations.append(closest.quaternion)
-        mean = Rotation.concatenate(closest_rotations).mean(weights=multiplicity)
+            closestRotations.append(closest.quaternion)
+        mean = Rotation.concatenate(closestRotations).mean(weights=multiplicity)
         return Orientation(quaternion=mean,
                            symmetry=reference.symmetry.lattice)
 
@@ -386,7 +386,7 @@ class Orientation:
                 ax.plot(scale*np.cos(np.linspace(0., 2.*np.pi, 100)),
                         scale*np.sin(np.linspace(0., 2.*np.pi, 100)), 'k--')
             # plot poles
-            oHelp = Orientation(Eulers=np.array(
+            oHelp = Orientation(eulers=np.array(
                 [0., 0., 0.]), symmetry=self.symmetry.__repr__())
             poles = np.array(poles, dtype=float)
             poles /= np.linalg.norm(poles)
@@ -405,10 +405,10 @@ class Orientation:
                 xy[2] = 0.0
                 self.plotLine(ax, xy, [0., 0., 0.], color='c')  # plot point
                 if annotate:
-                    x_, y_ = self.project(xy[0], xy[1], xy[2])
-                    label_ = str(np.array(conjAxis, dtype=int))[1:-1]
-                    label_ = label_.replace(' ', '')
-                    ax.text(x_+0.05, y_+0.05, label_)
+                    xCoordinate, yCoordinate = self.project(xy[0], xy[1], xy[2])
+                    label = str(np.array(conjAxis, dtype=int))[1:-1]
+                    label = label.replace(' ', '')
+                    ax.text(xCoordinate+0.05, yCoordinate+0.05, label)
 
         # finalize plot
         if self.plot2D == '3D':
@@ -438,14 +438,14 @@ class Orientation:
         Args:
           equivalent: print also equivalent orientations
         """
-        print('Euler angles:', np.round(as_bunge_eulers(self.quaternion, degrees=True), 1))
+        print('Euler angles:', np.round(asBungeEulers(self.quaternion, degrees=True), 1))
         rotM = self.quaternion.as_matrix()
         print('HKL', np.array(rotM[2, :]/np.min(rotM[2, :]), dtype=int))
         print('UVW', -np.array(rotM[0, :]/np.min(rotM[0, :]), dtype=int))
         if equivalent:
             print('Equivalent orientations - Euler angles:')
             for q in self.symmetry.equivalentQuaternions(self.quaternion):
-                angles = as_bunge_eulers(q, degrees=True)
+                angles = asBungeEulers(q, degrees=True)
                 angles[angles < 0] += 360.
                 print('   [%5.1f  %5.1f  %5.1f]' % tuple(angles))
         return

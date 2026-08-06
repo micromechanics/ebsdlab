@@ -8,7 +8,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.spatial.transform import Rotation
 
-from ._rotation import as_rodrigues
+from ._rotation import asRodrigues
 
 # standard stereographic triangle (SST): Smallest region representing symmetry-equivalent crystal directions in an inverse pole figure (IPF).
 # The improper basis uses inversion/reflection equivalence and folds opposite directions into one triangle.
@@ -161,7 +161,7 @@ GROUPS: dict[str, dict[str, Any]] = {
 LATTICE_ALIASES = {'rhombohedral': 'trigonal'}
 
 
-def _orthogonal_cell(a: float, b: float, c: float) -> np.ndarray:
+def _orthogonalCell(a: float, b: float, c: float) -> np.ndarray:
     """Return the twelve centered edges of an orthogonal unit cell."""
     vertices = np.array([
         [-a, -b, -c], [-a, -b, c], [-a, b, -c], [-a, b, c],
@@ -174,7 +174,7 @@ def _orthogonal_cell(a: float, b: float, c: float) -> np.ndarray:
     return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
 
 
-def _hexagonal_cell(a: float, c: float) -> np.ndarray:
+def _hexagonalCell(a: float, c: float) -> np.ndarray:
     """Return the eighteen centered edges of a regular hexagonal prism."""
     angles = np.arange(6) * np.pi / 3.0
     basal = np.column_stack((a * np.cos(angles), a * np.sin(angles)))
@@ -189,20 +189,20 @@ def _hexagonal_cell(a: float, c: float) -> np.ndarray:
     return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
 
 
-def _parallelepiped_cell(a: float, b: float, c: float,
+def _parallelepipedCell(a: float, b: float, c: float,
                          alpha: float, beta: float, gamma: float) -> np.ndarray:
     """Return centered edges of a cell defined by lengths and angles in degrees."""
     alpha, beta, gamma = np.deg2rad((alpha, beta, gamma))
-    cos_alpha, cos_beta, cos_gamma = np.cos((alpha, beta, gamma))
-    sin_gamma = np.sin(gamma)
-    c_y = c * (cos_alpha - cos_beta * cos_gamma) / sin_gamma
-    c_z_squared = c*c - (c*cos_beta)**2 - c_y*c_y
-    if c_z_squared <= 0.0:
+    cosAlpha, cosBeta, cosGamma = np.cos((alpha, beta, gamma))
+    sinGamma = np.sin(gamma)
+    cY = c * (cosAlpha - cosBeta * cosGamma) / sinGamma
+    cZSquared = c*c - (c*cosBeta)**2 - cY*cY
+    if cZSquared <= 0.0:
         raise ValueError('lattice angles do not define a valid unit cell')
     vectors = np.array([
         [a, 0.0, 0.0],
-        [b * cos_gamma, b * sin_gamma, 0.0],
-        [c * cos_beta, c_y, np.sqrt(c_z_squared)],
+        [b * cosGamma, b * sinGamma, 0.0],
+        [c * cosBeta, cY, np.sqrt(cZSquared)],
     ])
     vertices = np.array([
         (sx * vectors[0] + sy * vectors[1] + sz * vectors[2]) / 2.0
@@ -268,9 +268,9 @@ class Symmetry:
             return [[None]]
 
         cellConfig = GROUPS[self.lattice]['cell']
-        _, default_b, default_c = cellConfig['default_ratio']
-        b = a * default_b if b is None else b
-        c = a * default_c if c is None else c
+        _, defaultB, defaultC = cellConfig['default_ratio']
+        b = a * defaultB if b is None else b
+        c = a * defaultC if c is None else c
         dimensions = np.asarray((a, b, c), dtype=float)
         if not np.all(np.isfinite(dimensions)) or np.any(dimensions <= 0.0):
             raise ValueError('lattice constants must be finite and positive')
@@ -278,10 +278,10 @@ class Symmetry:
         for axis in cellConfig['equal_to_a']:
             if not np.isclose(a, axisValues[axis]):
                 raise ValueError(f'{self.lattice} requires a = {axis}')
-        default_angles = cellConfig.get('default_angles', (90.0, 90.0, 90.0))
+        defaultAngles = cellConfig.get('default_angles', (90.0, 90.0, 90.0))
         angles = np.asarray(tuple(
             default if value is None else value
-            for value, default in zip((alpha, beta, gamma), default_angles)
+            for value, default in zip((alpha, beta, gamma), defaultAngles)
         ), dtype=float)
         if not np.all(np.isfinite(angles)) or np.any((angles <= 0.0) | (angles >= 180.0)):
             raise ValueError('lattice angles must be finite and between 0 and 180 degrees')
@@ -292,10 +292,10 @@ class Symmetry:
         if cellConfig['geometry'] == 'rhombohedral' and not np.allclose(angles, angles[0]):
             raise ValueError('trigonal requires alpha = beta = gamma')
         if cellConfig['geometry'] == 'hexagonal':
-            return _hexagonal_cell(a, c)
+            return _hexagonalCell(a, c)
         if cellConfig['geometry'] in {'monoclinic', 'triclinic', 'rhombohedral'}:
-            return _parallelepiped_cell(a, b, c, *angles)
-        return _orthogonal_cell(a, b, c)
+            return _parallelepipedCell(a, b, c, *angles)
+        return _orthogonalCell(a, b, c)
 
 
     def equivalentQuaternions(self, quaternion: Rotation, who: Any = None) -> list[Rotation]:
@@ -303,64 +303,64 @@ class Symmetry:
         return [quaternion*q for q in self.symmetryQuats(who)]
 
 
-    def inFZ(self, R: Rotation | np.ndarray) -> bool:
+    def inFZ(self, rotationOrRodrigues: Rotation | np.ndarray) -> bool:
         """Return whether a Rodrigues vector lies in the fundamental zone (FZ)"""
-        if isinstance(R, Rotation):
-            R = as_rodrigues(R)
-        raw_rodrigues = np.asarray(R, dtype=float)
+        if isinstance(rotationOrRodrigues, Rotation):
+            rotationOrRodrigues = asRodrigues(rotationOrRodrigues)
+        rawRodrigues = np.asarray(rotationOrRodrigues, dtype=float)
         # fundamental zone in Rodrigues space is point symmetric around origin
-        R = abs(raw_rodrigues)
+        rodrigues = abs(rawRodrigues)
         if self.lattice == 'cubic':
             limit = math.sqrt(2.0) - 1.0
             return bool(
-                limit >= R[0] and limit >= R[1] and limit >= R[2]
-                and 1.0 >= R[0] + R[1] + R[2]
+                limit >= rodrigues[0] and limit >= rodrigues[1] and limit >= rodrigues[2]
+                and 1.0 >= rodrigues[0] + rodrigues[1] + rodrigues[2]
             )
         if self.lattice == 'hexagonal':
             return bool(
-                1.0 >= R[0] and 1.0 >= R[1] and 1.0 >= R[2]
-                and 2.0 >= math.sqrt(3.0)*R[0] + R[1]
-                and 2.0 >= math.sqrt(3.0)*R[1] + R[0]
-                and 2.0 >= math.sqrt(3.0) + R[2]
+                1.0 >= rodrigues[0] and 1.0 >= rodrigues[1] and 1.0 >= rodrigues[2]
+                and 2.0 >= math.sqrt(3.0)*rodrigues[0] + rodrigues[1]
+                and 2.0 >= math.sqrt(3.0)*rodrigues[1] + rodrigues[0]
+                and 2.0 >= math.sqrt(3.0) + rodrigues[2]
             )
         if self.lattice == 'tetragonal':
             return bool(
-                1.0 >= R[0] and 1.0 >= R[1]
-                and math.sqrt(2.0) >= R[0] + R[1]
-                and math.sqrt(2.0) >= R[2] + 1.0
+                1.0 >= rodrigues[0] and 1.0 >= rodrigues[1]
+                and math.sqrt(2.0) >= rodrigues[0] + rodrigues[1]
+                and math.sqrt(2.0) >= rodrigues[2] + 1.0
             )
         if self.lattice == 'orthorhombic':
-            return bool(1.0 >= R[0] and 1.0 >= R[1] and 1.0 >= R[2])
+            return bool(1.0 >= rodrigues[0] and 1.0 >= rodrigues[1] and 1.0 >= rodrigues[2])
         if self.lattice in {'monoclinic', 'triclinic', 'trigonal'}:
             # The Voronoi region of identity is the fundamental zone for
             # these lower-symmetry proper rotation groups.
-            magnitude = np.linalg.norm(raw_rodrigues)
+            magnitude = np.linalg.norm(rawRodrigues)
             rotation = (Rotation.from_rotvec(
-                2.0 * math.atan(magnitude) * raw_rodrigues / magnitude
+                2.0 * math.atan(magnitude) * rawRodrigues / magnitude
             ) if magnitude else Rotation.identity())
             magnitudes = (rotation * self.symmetryQuats()).magnitude()
             return bool(magnitudes[0] <= np.min(magnitudes) + 1e-12)
         return True
 
 
-    def inDisorientationSST(self, R: Rotation | np.ndarray) -> bool:
+    def inDisorientationSST(self, rotationOrRodrigues: Rotation | np.ndarray) -> bool:
         """Return whether a misorientation lies in the standard triangle.
 
         The criteria follow Heinz and Neumann, Acta Cryst. A47 (1991), 780-789.
         """
-        if isinstance(R, Rotation):
-            R = as_rodrigues(R)
+        if isinstance(rotationOrRodrigues, Rotation):
+            rotationOrRodrigues = asRodrigues(rotationOrRodrigues)
         if self.lattice == 'cubic':
-            return bool(R[0] >= R[1] and R[1] >= R[2] and R[2] >= 0.0)
+            return bool(rotationOrRodrigues[0] >= rotationOrRodrigues[1] and rotationOrRodrigues[1] >= rotationOrRodrigues[2] and rotationOrRodrigues[2] >= 0.0)
         if self.lattice == 'hexagonal':
             return bool(
-                R[0] >= math.sqrt(3.0)*R[1]
-                and R[1] >= 0.0 and R[2] >= 0.0
+                rotationOrRodrigues[0] >= math.sqrt(3.0)*rotationOrRodrigues[1]
+                and rotationOrRodrigues[1] >= 0.0 and rotationOrRodrigues[2] >= 0.0
             )
         if self.lattice == 'tetragonal':
-            return bool(R[0] >= R[1] and R[1] >= 0.0 and R[2] >= 0.0)
+            return bool(rotationOrRodrigues[0] >= rotationOrRodrigues[1] and rotationOrRodrigues[1] >= 0.0 and rotationOrRodrigues[2] >= 0.0)
         if self.lattice == 'orthorhombic':
-            return bool(R[0] >= 0.0 and R[1] >= 0.0 and R[2] >= 0.0)
+            return bool(rotationOrRodrigues[0] >= 0.0 and rotationOrRodrigues[1] >= 0.0 and rotationOrRodrigues[2] >= 0.0)
         return True
 
 

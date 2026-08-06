@@ -134,7 +134,7 @@ OIM software shows the 2D projection with the Rolling Direction (RD) upward. Not
 
    import numpy as np
    from ebsdlab.orientation import Orientation
-   o = Orientation(Eulers=np.radians([0,10,10]), symmetry="cubic")
+   o = Orientation(eulers=np.radians([0,10,10]), symmetry="cubic")
    o.plot( )
    o.plot(plot2D='up-left')
    o.plot(poles=[1,0,0], plot2D='up-left', scale=1.5)

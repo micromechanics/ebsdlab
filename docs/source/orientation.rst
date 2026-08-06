@@ -27,17 +27,17 @@ Each example:
     from ebsdlab.orientation import Orientation
 
     angle = np.radians([0,0,0])
-    o = Orientation(Eulers=angle, symmetry="cubic")
+    o = Orientation(eulers=angle, symmetry="cubic")
     print('Orientation object is easy to read:', o)
-    np.round(o.IPFcolor([0,0,1]),3)
+    np.round(o.ipfColor([0,0,1]),3)
 
     angle = np.radians([0,45,0])
-    o = Orientation(Eulers=angle, symmetry="cubic")
-    np.round(o.IPFcolor([0,0,1]),3)
+    o = Orientation(eulers=angle, symmetry="cubic")
+    np.round(o.ipfColor([0,0,1]),3)
 
     angle = np.radians([0,55,45])
-    o = Orientation(Eulers=angle, symmetry="cubic")
-    np.round(o.IPFcolor([0,0,1]),3)
+    o = Orientation(eulers=angle, symmetry="cubic")
+    np.round(o.ipfColor([0,0,1]),3)
 
 Plot unit cell
 --------------
@@ -53,7 +53,7 @@ Plot unit cells and pole-figures using the orientation-class:
    import numpy as np
    from ebsdlab.orientation import Orientation
    angle = np.radians([0,55,45])
-   o = Orientation(Eulers=angle, symmetry="cubic")
+   o = Orientation(eulers=angle, symmetry="cubic")
    o.toScreen()
    o.plot(plot2D='up-left')
    o.plot(poles=[1,0,0], plot2D='up-left', scale=1.5)
@@ -95,7 +95,7 @@ Procedure:
     # plot it and calculate Euler angles
     o = Orientation(matrix=rotM, symmetry='cubic')
     print('Euler angles are in degree: ',o.asEulers(degrees=True))
-    print('The color is: ',np.round(o.IPFcolor( [0,0,1] ),3))
+    print('The color is: ',np.round(o.ipfColor( [0,0,1] ),3))
     o.plot()
     o.plot([1,0,0])
 
@@ -117,10 +117,10 @@ This example demonstrates how to iterate through all symmetrically equivalent di
     from ebsdlab.orientation import Orientation
 
     crystal_axis = np.array([1, 1, 0])
-    o     = Orientation(Eulers=np.radians([0,45,0]), symmetry="cubic")
+    o     = Orientation(eulers=np.radians([0,45,0]), symmetry="cubic")
     print('Orientation:\n',o,'\n')
 
-    oHelp = Orientation(Eulers=np.array([0.,0.,0.]), symmetry="cubic")
+    oHelp = Orientation(eulers=np.array([0.,0.,0.]), symmetry="cubic")
     print('Help Orientation:\n',oHelp,'\n')
 
     for q_sym in oHelp.symmetry.symmetryQuats():
@@ -136,8 +136,8 @@ Example: Calculate average orientation
 
     import numpy as np
     from ebsdlab.orientation import Orientation
-    a = Orientation(Eulers=np.radians([0,45,0]), symmetry='cubic')
-    b = Orientation(Eulers=np.radians([0,0,0]),  symmetry='cubic')
-    c = Orientation(Eulers=np.radians([0,15,0]), symmetry='cubic')
+    a = Orientation(eulers=np.radians([0,45,0]), symmetry='cubic')
+    b = Orientation(eulers=np.radians([0,0,0]),  symmetry='cubic')
+    c = Orientation(eulers=np.radians([0,15,0]), symmetry='cubic')
     avg = Orientation.average([a,b,c])
     print("Rotation angles",avg.asEulers(degrees=True))

@@ -1,5 +1,5 @@
 """Reusable Qt widgets used by the ebsdlab desktop interface."""
 
-from .range_selector import RangeSelector
+from .rangeSelector import RangeSelector
 
 __all__ = ['RangeSelector']
