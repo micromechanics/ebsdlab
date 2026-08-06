@@ -300,8 +300,11 @@ class EBSD:
         fileOut.write('#\n# GRID: HexGrid\n#\n')
         for i in range(len(self.x)):
             phi1, phi, phi2 = tuple(asBungeEulers(self.quaternions[i]))
-            fileOut.write(' %8.5f %8.5f %8.5f %12.5f %12.5f %8.3f %6.3f %2d %6d %7.3f\n' %
-                          (phi1, phi, phi2, self.x[i], self.y[i], self.iq[i], self.ci[i], self.phaseID[i], self.semSignal[i], self.fit[i]))
+            fileOut.write(
+                f' {phi1:8.5f} {phi:8.5f} {phi2:8.5f} {self.x[i]:12.5f}'
+                f' {self.y[i]:12.5f} {self.iq[i]:8.3f} {self.ci[i]:6.3f}'
+                f' {self.phaseID[i]:2d} {self.semSignal[i]:6d} {self.fit[i]:7.3f}\n'
+            )
         fileOut.close()
         print('Duration writeANG: ', int(
             np.round(time.time()-startTime)), 'sec')
@@ -431,12 +434,17 @@ class EBSD:
             else:
                 columnNames.append('Unknown'+str(order))
                 columnType.append(4)
-        if columnNames == ['Phase', 'phi1', 'Phi', 'phi2', 'MAD', 'BC', 'BS', 'Bands', 'Error', 'ReliabilityIndex']:
+        expectedColumns = [
+            'Phase', 'phi1', 'Phi', 'phi2', 'MAD', 'BC', 'BS', 'Bands',
+            'Error', 'ReliabilityIndex',
+        ]
+        if columnNames == expectedColumns:
             print('  CRC-Data in correct order')
         else:
             print('  WARNING! CRC-Data not in correct order! WARNING')
             print(
-                "    should be ['Phase', 'phi1', 'Phi', 'phi2', 'MAD', 'BC', 'BS', 'Bands', 'Error', 'ReliabilityIndex']")
+                f'    should be {expectedColumns}'
+            )
             print('    is       ', columnNames)
             print('    if data missing at end, no problem')
         # print columnType
@@ -522,7 +530,8 @@ class EBSD:
     # @}
     ##
     # @name Mask and Path routines
-    # masked areas are plotted in black. Hence initially no point is part of the mask, i.e. all points are false
+    # Masked areas are plotted in black. Initially no point is part of the mask;
+    # all points are false.
     # @{
 
     def maskCI(self, ci):
@@ -544,7 +553,8 @@ class EBSD:
 
     def removePointsOutsideMask(self):
         """
-        set all data-points outside of mask to invalid such that after export to OIM, it will be read there as non-existing points
+        Set points outside the mask invalid so they are read as nonexistent by
+        OIM after export.
         """
         self.ci[~self.mask] = -1.0
         self.fit[~self.mask] = 180.0
@@ -649,7 +659,11 @@ class EBSD:
                     inFZ = np.logical_and(
                         np.logical_and(
                             fzThreshold >= theQRodrigues[:, 0], fzThreshold >= theQRodrigues[:, 1]),
-                        np.logical_and(fzThreshold >= theQRodrigues[:, 2], 1.0 >= np.sum(theQRodrigues, axis=1)))
+                        np.logical_and(
+                            fzThreshold >= theQRodrigues[:, 2],
+                            1.0 >= np.sum(theQRodrigues, axis=1),
+                        )
+                    )
                     angle = theQ.magnitude()
                     foundAngle[inFZ] = True
                     angles[inFZ, iNeighbor] = angle[inFZ]
@@ -668,7 +682,8 @@ class EBSD:
     # @name PLOT METHODS
     # @{
 
-    def plot(self, vector, widthPixel=None, vmax='', vmin='', interpolationType='nearest', cmap=None, show=True, cbar=True):
+    def plot(self, vector, widthPixel=None, vmax='', vmin='',
+             interpolationType='nearest', cmap=None, show=True, cbar=True):
         """
         given a class-vector, plot the vector as an image<br>
         the x and y are given by the class-vector x and y
@@ -757,7 +772,8 @@ class EBSD:
             griddata(points, rgb[1, self.vMask], (x, y), interpolationType)*255)
         blue = np.uint8(
             griddata(points, rgb[2, self.vMask], (x, y), interpolationType)*255)
-        # put them all in one array and then reshape it and transpose by changing the order to 0->2->1 (determined by try and error)
+        # Put the channels into one array, reshape, then transpose them from
+        # 0->2->1 (determined empirically).
         allColors = np.concatenate((red, green, blue), axis=1)
         imageArray = np.transpose(allColors.reshape(
             heightPixel, 3, widthPixel), (0, 2, 1))
@@ -955,8 +971,8 @@ class EBSD:
                        barPixel+scale/10, offsetY+scale*9/10), 'black')  # black bar
         draw.text((offsetX+(barPixel+scale/5-textWidth)/2, offsetY),
                   textString, 'black', font=font)
-        xMax, xMin = np.max(self.x[self.vMask]), np.min(self.x[self.vMask])
-        yMax, yMin = np.max(self.y[self.vMask]), np.min(self.y[self.vMask])
+        # xMax, xMin = np.max(self.x[self.vMask]), np.min(self.x[self.vMask])
+        # yMax, yMin = np.max(self.y[self.vMask]), np.min(self.y[self.vMask])
         fig, ax = plt.subplots()
         ax.imshow(image, origin='upper')
         ax.set_xticks([])
@@ -994,7 +1010,9 @@ class EBSD:
         ax.add_artist(scaleBar)
         return scaleBar
 
-    def plotPF(self, axis=[1, 0, 0], points=False, fileName=None, color='#1f77b4', alpha=1.0, show=True, density=256, size=2, proj2D='up-left', vmin=0.0, vmax=1.0):
+    def plotPF(self, axis=[1, 0, 0], points=False, fileName=None,
+               color='#1f77b4', alpha=1.0, show=True, density=256, size=2,
+               proj2D='up-left', vmin=0.0, vmax=1.0):
         """
         plot pole figure
 

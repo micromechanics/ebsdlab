@@ -10,9 +10,11 @@ from scipy.spatial.transform import Rotation
 
 from ._rotation import asRodrigues
 
-# standard stereographic triangle (SST): Smallest region representing symmetry-equivalent crystal directions in an inverse pole figure (IPF).
+# Standard stereographic triangle (SST): smallest region representing
+# symmetry-equivalent crystal directions in an inverse pole figure (IPF).
 # The improper basis uses inversion/reflection equivalence and folds opposite directions into one triangle.
-# The proper basis describes the adjoining triangle needed when equivalence is restricted to handedness-preserving rotations.
+# The proper basis describes the adjoining triangle needed when equivalence is
+# restricted to handedness-preserving rotations.
 # Note: SciPy's rotation groups themselves contain proper rotations only.
 GROUPS: dict[str, dict[str, Any]] = {
     'cubic': {
@@ -219,7 +221,10 @@ class Symmetry:
 
     def __init__(self, symmetry: str | None = None) -> None:
         self.lattice: str | None
-        lattice = LATTICE_ALIASES.get(symmetry.lower(), symmetry.lower()) if isinstance(symmetry, str) else None
+        lattice = (
+            LATTICE_ALIASES.get(symmetry.lower(), symmetry.lower())
+            if isinstance(symmetry, str) else None
+        )
         if lattice in GROUPS:
             self.lattice = lattice
         else:
@@ -351,16 +356,28 @@ class Symmetry:
         if isinstance(rotationOrRodrigues, Rotation):
             rotationOrRodrigues = asRodrigues(rotationOrRodrigues)
         if self.lattice == 'cubic':
-            return bool(rotationOrRodrigues[0] >= rotationOrRodrigues[1] and rotationOrRodrigues[1] >= rotationOrRodrigues[2] and rotationOrRodrigues[2] >= 0.0)
+            return bool(
+                rotationOrRodrigues[0] >= rotationOrRodrigues[1]
+                and rotationOrRodrigues[1] >= rotationOrRodrigues[2]
+                and rotationOrRodrigues[2] >= 0.0
+            )
         if self.lattice == 'hexagonal':
             return bool(
                 rotationOrRodrigues[0] >= math.sqrt(3.0)*rotationOrRodrigues[1]
                 and rotationOrRodrigues[1] >= 0.0 and rotationOrRodrigues[2] >= 0.0
             )
         if self.lattice == 'tetragonal':
-            return bool(rotationOrRodrigues[0] >= rotationOrRodrigues[1] and rotationOrRodrigues[1] >= 0.0 and rotationOrRodrigues[2] >= 0.0)
+            return bool(
+                rotationOrRodrigues[0] >= rotationOrRodrigues[1]
+                and rotationOrRodrigues[1] >= 0.0
+                and rotationOrRodrigues[2] >= 0.0
+            )
         if self.lattice == 'orthorhombic':
-            return bool(rotationOrRodrigues[0] >= 0.0 and rotationOrRodrigues[1] >= 0.0 and rotationOrRodrigues[2] >= 0.0)
+            return bool(
+                rotationOrRodrigues[0] >= 0.0
+                and rotationOrRodrigues[1] >= 0.0
+                and rotationOrRodrigues[2] >= 0.0
+            )
         return True
 
 

@@ -160,6 +160,7 @@ class EBSDGui(QMainWindow):
         self.fileName.setToolTip(str(self.filePath))
 
     def chooseFile(self):
+        """Prompt for an EBSD file and create the selected plot."""
         name, _ = QFileDialog.getOpenFileName(
             self, 'Open EBSD file', '', 'EBSD files (*.ang *.osc *.txt *.crc)')
         if name:
@@ -184,6 +185,7 @@ class EBSDGui(QMainWindow):
             self.ebsd.cropVMask(xmin, ymin, xmax, ymax)
 
     def createPlot(self):
+        """Load the selected data and render the chosen plot style."""
         try:
             self._loadEbsd()
             self._applyFilters()
@@ -231,6 +233,7 @@ class EBSDGui(QMainWindow):
         self.plotLayout.addWidget(self.canvas)
 
     def addUnitCellOverlay(self, event):
+        """Add a unit-cell overlay at a click in an IPF plot."""
         if (self.ebsd is None or self.plotType.currentText() != 'IPF map'
                 or event.inaxes is None or event.xdata is None or event.ydata is None):
             return
@@ -243,6 +246,7 @@ class EBSDGui(QMainWindow):
         self.statusBar().showMessage('Unit-cell overlay added')
 
     def clearUnitCellOverlays(self):
+        """Recreate the plot without its unit-cell overlays."""
         if self.figure is not None and self.overlays:
             self.createPlot()
 
@@ -254,25 +258,27 @@ class EBSDGui(QMainWindow):
         if self.ebsd is None:
             return
         lines = ['from ebsdlab import EBSD', 'import matplotlib.pyplot as plt', '',
-                 'emap = EBSD({!r})'.format(str(self.filePath)),
-                 'emap.maskReset()', 'emap.setVMask({})'.format(self.downsample.value())]
+                 f'emap = EBSD({str(self.filePath)!r})',
+                 'emap.maskReset()', f'emap.setVMask({self.downsample.value()})']
         if self.ciEnabled.isChecked():
-            lines.append('emap.maskCI({})'.format(self.ciThreshold.value()))
+            lines.append(f'emap.maskCI({self.ciThreshold.value()})')
         if self.cropEnabled.isChecked():
             xmin, xmax = self.cropX.values()
             ymin, ymax = self.cropY.values()
-            lines.append('emap.cropVMask({}, {}, {}, {})'.format(xmin, ymin, xmax, ymax))
+            lines.append(f'emap.cropVMask({xmin}, {ymin}, {xmax}, {ymax})')
         plotType = self.plotType.currentText()
         if plotType == 'CI map':
             lines.append('fig = emap.plot(emap.ci, show=False)')
         elif plotType == 'IPF map':
-            lines.append("fig = emap.plotIPF(direction={!r}, show=False)".format(
-                self.subplotStyle.currentText()))
+            lines.append(
+                f'fig = emap.plotIPF(direction={self.subplotStyle.currentText()!r}, show=False)'
+            )
             for x, y, scale in self.overlays:
-                lines.append('emap.addUnitCellOverlay(fig.axes[0], {:.6g}, {:.6g}, scale={:.6g})'.format(
-                    x, y, scale))
+                lines.append(
+                    f'emap.addUnitCellOverlay(fig.axes[0], {x:.6g}, {y:.6g}, scale={scale:.6g})'
+                )
         else:
-            lines.append('fig = emap.plotPF(axis={}, show=False)'.format(self._selectedPoleAxis()))
+            lines.append(f'fig = emap.plotPF(axis={self._selectedPoleAxis()}, show=False)')
         if plotType != 'Pole figure':
             lines.append('fig.subplots_adjust(left=0.0125, right=0.99, bottom=0.0125, top=0.99)')
         if self.scaleBar.isChecked() and plotType != 'Pole figure':
@@ -283,6 +289,7 @@ class EBSDGui(QMainWindow):
         self.code.setPlainText('\n'.join(lines))
 
     def copyPythonCode(self):
+        """Copy the generated, reproducible plotting code to the clipboard."""
         if self.code.toPlainText():
             QApplication.clipboard().setText(self.code.toPlainText())
             self.statusBar().showMessage('Python code copied to clipboard')

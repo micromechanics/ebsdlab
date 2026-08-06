@@ -54,22 +54,25 @@ class Orientation:
     copy = __copy__
 
     def __repr__(self):
-        return 'Symmetry: %s\n' % (self.symmetry) + \
-               'Quaternion: %s\n' % (self.quaternion) + \
-               'Matrix:\n%s\n' % ('\n'.join(['\t'.join(map(str, self.asMatrix()[i, :])) for i in range(3)])) + \
-               'Bunge Eulers / deg: %s' % ('\t'.join(map(str,
-                                           self.asEulers('bunge', degrees=True))))
+        matrix = '\n'.join('\t'.join(map(str, self.asMatrix()[i, :])) for i in range(3))
+        eulers = '\t'.join(map(str, self.asEulers('bunge', degrees=True)))
+        return (f'Symmetry: {self.symmetry}\n'
+                f'Quaternion: {self.quaternion}\n'
+                f'Matrix:\n{matrix}\n'
+                f'Bunge Eulers / deg: {eulers}')
 
     def asEulers(self,
                  notation='bunge',
                  degrees=False,
                  standardRange=False):
+        """Return this orientation's Euler angles in the requested convention."""
         if notation.lower() not in ('bunge', 'zxz'):
             raise ValueError("Only the Bunge/intrinsic ZXZ convention is supported")
         return asBungeEulers(self.quaternion, degrees, standardRange)
     eulers = property(asEulers)
 
     def asMatrix(self):
+        """Return this orientation as a 3-by-3 rotation matrix."""
         return self.quaternion.as_matrix()
     matrix = property(asMatrix)
 
@@ -80,10 +83,15 @@ class Orientation:
     infz = property(inFZ)
 
     def equivalentQuaternions(self, who=None):
+        """Return symmetry-equivalent quaternions, optionally selected by index."""
         return self.symmetry.equivalentQuaternions(self.quaternion, who)
 
     def equivalentOrientations(self, who=None):
-        return [Orientation(quaternion=q, symmetry=self.symmetry.lattice) for q in self.equivalentQuaternions(who)]
+        """Return symmetry-equivalent orientations, optionally selected by index."""
+        return [
+            Orientation(quaternion=q, symmetry=self.symmetry.lattice)
+            for q in self.equivalentQuaternions(who)
+        ]
 
     def reduced(self):
         '''
@@ -111,7 +119,8 @@ class Orientation:
           SST: True (rotation axis falls into SST); False
 
         Returns:
-          disorientation quaternion, idx of equivalent orientation1, idx of equivalent orientation2, num. of conjugated
+          disorientation quaternion; indices of equivalent orientations; and
+          whether the result was conjugated
         """
         if self.symmetry != other.symmetry:
             raise TypeError(
@@ -137,17 +146,18 @@ class Orientation:
                 i, j, k == 1)
 
     def inversePole(self, axis, proper=False, sst=True):
-        """axis rotated according to orientation (using crystal symmetry to ensure location falls into SST)
+        """Rotate an axis into the standard stereographic triangle using symmetry.
 
         Args:
           axis: vector in crystal orientation, e.g. [100]
-          proper: considers only vectors with z >= 0, hence uses two neighboring SSTs to determine if in SST. i.e. allows more positive results, rgb-value does not depend on this
+          proper: consider only vectors with z >= 0 using two neighboring SSTs;
+              this permits more positive results without changing the RGB value
           SST: iterate through all equivalent and find the one in the SST
 
         Returns:
           vector of axis
         """
-        if sst:                                                                                         # pole requested to be within SST
+        if sst:  # Pole requested to be within SST.
             # test all symmetric equivalent quaternions
             for i, q in enumerate(self.symmetry.equivalentQuaternions(self.quaternion)):
                 # align crystal direction to axis
@@ -164,7 +174,8 @@ class Orientation:
 
         Args:
            axis: axis of pole figure (ND=001)
-           proper: considers only vectors with z >= 0, hence uses two neighboring SSTs to determine if in SST. i.e. allows more positive results, rgb-value does not depend on this
+           proper: consider vectors with z >= 0 using two neighboring SSTs;
+               this permits more positive results without changing the RGB value
 
         Returns:
            vector of color (rgb)
@@ -390,7 +401,7 @@ class Orientation:
                 [0., 0., 0.]), symmetry=self.symmetry.__repr__())
             poles = np.array(poles, dtype=float)
             poles /= np.linalg.norm(poles)
-            for idx, q in enumerate(oHelp.symmetry.equivalentQuaternions(oHelp.quaternion)):
+            for _, q in enumerate(oHelp.symmetry.equivalentQuaternions(oHelp.quaternion)):
                 conjAxis = q.apply(poles)  # e.g. [100]
                 direction = self.quaternion.apply(conjAxis)
                 if direction[2] < -self.eps:
@@ -447,7 +458,7 @@ class Orientation:
             for q in self.symmetry.equivalentQuaternions(self.quaternion):
                 angles = asBungeEulers(q, degrees=True)
                 angles[angles < 0] += 360.
-                print('   [%5.1f  %5.1f  %5.1f]' % tuple(angles))
+                print(f'   [{angles[0]:5.1f}  {angles[1]:5.1f}  {angles[2]:5.1f}]')
         return
 
     # @}
@@ -462,7 +473,8 @@ class Orientation:
         """Related
 
         Models:
-          * KS from S. Morito et al./Journal of Alloys and Compounds 5775 (2013) S587-S592 DOES THIS PAPER EXISTS?
+          * KS from S. Morito et al./Journal of Alloys and Compounds 5775
+            (2013) S587-S592 DOES THIS PAPER EXISTS?
           * GT from Y. He et al./Journal of Applied Crystallography (2006). 39, 72-81
           * GT' from Y. He et al./Journal of Applied Crystallography (2006). 39, 72-81
           * NW from H. Kitahara et al./Materials Characterization 54 (2005) 378-386
