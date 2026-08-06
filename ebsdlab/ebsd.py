@@ -15,8 +15,9 @@ import scipy.ndimage as ndi
 from matplotlib import colors
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 from scipy.interpolate import griddata
+from scipy.spatial.transform import Rotation
+from ._rotation import as_bunge_eulers, as_rodrigues
 from .orientation import Orientation
-from .quaternion import Quaternion
 from .symmetry import Symmetry
 
 
@@ -94,7 +95,7 @@ class EBSD:
 
         # convert into quaternions and only use that
         eulers = np.vstack((self.phi1, self.PHI, self.phi2))
-        self.quaternions = Quaternion.fromEulers(eulers)
+        self.quaternions = Rotation.from_euler('ZXZ', eulers.T)
         del self.phi1
         del self.PHI
         del self.phi2
@@ -292,7 +293,7 @@ class EBSD:
         fileOut.write('# khlFamilies 3 1 1 1 0.0\n')
         fileOut.write('#\n# GRID: HexGrid\n#\n')
         for i in range(len(self.x)):
-            phi1, PHI, phi2 = tuple(self.quaternions[i].asEulers())
+            phi1, PHI, phi2 = tuple(as_bunge_eulers(self.quaternions[i]))
             fileOut.write(' %8.5f %8.5f %8.5f %12.5f %12.5f %8.3f %6.3f %2d %6d %7.3f\n' %
                           (phi1, PHI, phi2, self.x[i], self.y[i], self.IQ[i], self.CI[i], self.phaseID[i], self.SEMsignal[i], self.fit[i]))
         fileOut.close()
@@ -632,25 +633,22 @@ class EBSD:
         sym = self.sym[0]
         neighbors = self.neighbors()
         fzThreshold = math.sqrt(2.0)-1.0
-        qConj = self.quaternions.conjugated()
         angles = np.empty_like(neighbors, dtype=float)
         neighborSymQ = sym.symmetryQuats()
         symQ = neighborSymQ[0]
         for iNeighbor in range(6):
             neighborQ = self.quaternions[neighbors[:, iNeighbor]]
-            misQ = (self.quaternions.conjugated() * neighborQ).copy()
+            misQ = self.quaternions.inv() * neighborQ
             foundAngle = np.zeros((len(self.x)), dtype=bool)
             for nSQ in neighborSymQ:
-                theQ = symQ.conjugated()*misQ*nSQ
-                for k in range(2):  # try both conjugated versions
-                    theQ.conjugate()  # verified before
-                    theQ_Rod = abs(theQ.asRodrigues())
+                candidate = symQ.inv()*misQ*nSQ
+                for theQ in (candidate.inv(), candidate):
+                    theQ_Rod = abs(as_rodrigues(theQ))
                     inFZ = np.logical_and(
                         np.logical_and(
-                            fzThreshold >= theQ_Rod[0], fzThreshold >= theQ_Rod[1]),
-                        np.logical_and(fzThreshold >= theQ_Rod[2], 1.0 >= np.sum(theQ_Rod, axis=0)))
-                    # angle = theQ.asAngleAxis()[0]  #much slower: requires additional class; slight differences to faster version
-                    angle = 2.0*np.arctan(np.linalg.norm(theQ_Rod, axis=0))
+                            fzThreshold >= theQ_Rod[:, 0], fzThreshold >= theQ_Rod[:, 1]),
+                        np.logical_and(fzThreshold >= theQ_Rod[:, 2], 1.0 >= np.sum(theQ_Rod, axis=1)))
+                    angle = theQ.magnitude()
                     foundAngle[inFZ] = True
                     angles[inFZ, iNeighbor] = angle[inFZ]
                     mask = self.CI[neighbors[:, iNeighbor]] == -1.0
@@ -796,9 +794,9 @@ class EBSD:
                 continue
             equivQuaternions = sym.equivalentQuaternions(self.quaternions)
             for equivQuaternion in equivQuaternions:
-                pole = equivQuaternion.conjugated()*axis
+                pole = equivQuaternion.inv().apply(axis)
                 flags_, rgbs_ = sym.inSST(
-                    pole[:, ~flags], color=True, proper=False)
+                    pole[~flags].T, color=True, proper=False)
                 if len(rgbs_.shape) == 2:
                     rgbs[:, ~flags] = rgbs_
                     flags[~flags] = flags_
@@ -848,14 +846,14 @@ class EBSD:
         iClose = np.argmin((self.x-x)**2 + (self.y-y)**2)
         iQuaternion = self.quaternions[iClose]
         print('Euler angles at point:',
-              iQuaternion.asEulers(degrees=True, round=1))
+              np.round(as_bunge_eulers(iQuaternion, degrees=True), 1))
         loc = np.array([x, y, 0])
         for sym in self.sym:
             if sym.__repr__() == None:
                 continue
             for line in sym.unitCell():
-                start = iQuaternion*(np.array(line[:3], dtype=float)*scale)
-                end = iQuaternion*(np.array(line[3:], dtype=float)*scale)
+                start = iQuaternion.apply(np.array(line[:3], dtype=float)*scale)
+                end = iQuaternion.apply(np.array(line[3:], dtype=float)*scale)
                 # use OIM coordinate system: up-left: new vector (-y, x, z)
                 # use imshow with upper origin: second coordinate negative -> (-y, -x, z)
                 start = np.array([-start[1], -start[0],  start[2]])
@@ -996,18 +994,18 @@ class EBSD:
             mask = np.logical_and(self.mask, self.vMask)
             x, y = None, None
             for q in oHelp.symmetry.equivalentQuaternions(oHelp.quaternion):
-                conjAxis = q*axis
-                direction = self.quaternions*conjAxis
-                direction = direction[:, mask]  # filter mask
+                conjAxis = q.apply(axis)
+                direction = self.quaternions.apply(conjAxis)
+                direction = direction[mask]  # filter mask
                 # filter upward dome
-                direction = direction[:, direction[2, :] > 0]
-                direction[0, :] /= direction[2, :]+1.
-                direction[1, :] /= direction[2, :]+1.
+                direction = direction[direction[:, 2] > 0]
+                direction[:, 0] /= direction[:, 2]+1.
+                direction[:, 1] /= direction[:, 2]+1.
                 if x is None:
-                    x, y = direction[0, :], direction[1, :]
+                    x, y = direction[:, 0], direction[:, 1]
                 else:
-                    x, y = np.hstack((x, direction[0, :])), np.hstack(
-                        (y, direction[1, :]))
+                    x, y = np.hstack((x, direction[:, 0])), np.hstack(
+                        (y, direction[:, 1]))
         if points:
             if proj2D == 'down-right':
                 ax.plot(-x, y, '.', color=maxColor,

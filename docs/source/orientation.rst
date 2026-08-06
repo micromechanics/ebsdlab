@@ -124,8 +124,8 @@ This example demonstrates how to iterate through all symmetrically equivalent di
     print('Help Orientation:\n',oHelp,'\n')
 
     for q_sym in oHelp.symmetry.symmetryQuats():
-        equivalent_crystal_axis = q_sym * crystal_axis
-        sample_direction = o.quaternion * equivalent_crystal_axis
+        equivalent_crystal_axis = q_sym.apply(crystal_axis)
+        sample_direction = o.quaternion.apply(equivalent_crystal_axis)
         print(f"Crystal Axis: {str(np.round(equivalent_crystal_axis, 3)):<13}, Sample Direction: {np.round(sample_direction, 3)}")
 
 

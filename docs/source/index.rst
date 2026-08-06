@@ -23,7 +23,6 @@ The following modules exist
 - :class:`ebsdlab.ebsd.EBSD`: Read EBSD data from files, plotting inverse pole figures (IPF), pole figures (PF) or normal maps
 - :class:`ebsdlab.symmetry.Symmetry`: Material symmetry: cubic structure, hex, ...
 - :class:`ebsdlab.orientation.Orientation`: Sum of aterial symmetry and the rotation for a material point
-- :class:`ebsdlab.quaternion.Quaternion`: Mathematical description of rotations
 
 
 Table of Contents

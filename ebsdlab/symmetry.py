@@ -8,7 +8,8 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import interp1d
-from .quaternion import Quaternion
+from scipy.spatial.transform import Rotation
+from ._rotation import as_rodrigues
 
 
 ##
@@ -47,92 +48,33 @@ class Symmetry:
     # @name MATERIAL SPECIFIC ROUTINES
     # @{
 
-    def symmetryQuats(self, who=[]):
+    def symmetryQuats(self, who=None):
         '''
         List of symmetry operations as quaternions.
         '''
-        if self.lattice == 'cubic':
-            symQuats = [
-                [1.0,              0.0,              0.0,              0.0],
-                [0.0,              1.0,              0.0,              0.0],
-                [0.0,              0.0,              1.0,              0.0],
-                [0.0,              0.0,              0.0,              1.0],
-                [0.0,              0.0,              0.5 *
-                    math.sqrt(2), 0.5*math.sqrt(2)],
-                [0.0,              0.0,              0.5 *
-                    math.sqrt(2), -0.5*math.sqrt(2)],
-                [0.0,              0.5 *
-                    math.sqrt(2), 0.0,              0.5*math.sqrt(2)],
-                [0.0,              0.5 *
-                    math.sqrt(2), 0.0,             -0.5*math.sqrt(2)],
-                [0.0,              0.5*math.sqrt(2), -0.5*math.sqrt(2), 0.0],
-                [0.0,             -0.5*math.sqrt(2), -0.5*math.sqrt(2), 0.0],
-                [0.5,              0.5,              0.5,              0.5],
-                [-0.5,              0.5,
-                 0.5,              0.5],
-                [-0.5,              0.5,
-                 0.5,             -0.5],
-                [-0.5,              0.5,             -
-                 0.5,              0.5],
-                [-0.5,             -0.5,
-                 0.5,              0.5],
-                [-0.5,             -0.5,
-                 0.5,             -0.5],
-                [-0.5,             -0.5,             -
-                 0.5,              0.5],
-                [-0.5,              0.5,             -
-                 0.5,             -0.5],
-                [-0.5*math.sqrt(2), 0.0,
-                 0.0,              0.5*math.sqrt(2)],
-                [0.5*math.sqrt(2), 0.0,              0.0,
-                 0.5*math.sqrt(2)],
-                [-0.5*math.sqrt(2), 0.0,
-                 0.5*math.sqrt(2), 0.0],
-                [-0.5*math.sqrt(2), 0.0,             -
-                 0.5*math.sqrt(2), 0.0],
-                [-0.5*math.sqrt(2), 0.5*math.sqrt(2),
-                 0.0,              0.0],
-                [-0.5*math.sqrt(2), -0.5*math.sqrt(2), 0.0,              0.0],
-            ]
-        elif self.lattice == 'hexagonal':
-            symQuats = [
-                [1.0, 0.0, 0.0, 0.0],
-                [-0.5*math.sqrt(3), 0.0, 0.0, -0.5],
-                [0.5, 0.0, 0.0, 0.5*math.sqrt(3)],
-                [0.0, 0.0, 0.0, 1.0],
-                [-0.5, 0.0, 0.0, 0.5*math.sqrt(3)],
-                [-0.5*math.sqrt(3), 0.0, 0.0, 0.5],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, -0.5*math.sqrt(3), 0.5, 0.0],
-                [0.0, 0.5, -0.5*math.sqrt(3), 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, -0.5, -0.5*math.sqrt(3), 0.0],
-                [0.0, 0.5*math.sqrt(3), 0.5, 0.0],
-            ]
-        elif self.lattice == 'tetragonal':
-            symQuats = [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
-                [0.0, 0.5*math.sqrt(2), 0.5*math.sqrt(2), 0.0],
-                [0.0, -0.5*math.sqrt(2), 0.5*math.sqrt(2), 0.0],
-                [0.5*math.sqrt(2), 0.0, 0.0, 0.5*math.sqrt(2)],
-                [-0.5*math.sqrt(2), 0.0, 0.0, 0.5*math.sqrt(2)],
-            ]
-        elif self.lattice == 'orthorhombic':
-            symQuats = [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ]
-        else:
-            symQuats = [
-                [1.0, 0.0, 0.0, 0.0],
-            ]
-        return list(map(Quaternion,
-                        np.array(symQuats)[np.atleast_1d(np.array(who)) if who != [] else range(len(symQuats))]))
+        groups = {
+            'cubic': 'O',
+            'hexagonal': 'D6',
+            'tetragonal': 'D4',
+            'orthorhombic': 'D2',
+        }
+        # Generate all symmetry-equivalent rotation operations
+        operations = (
+            Rotation.create_group(groups[self.lattice])
+            if self.lattice in groups
+            else Rotation.identity(1)
+        )
+        # SciPy's cubic group does not start with identity, but we want to have that 0 is the unchanged rotation
+        identity = int(np.argmin(operations.magnitude()))
+        if identity != 0:
+            order = np.concatenate(
+                ([identity], np.delete(np.arange(len(operations)), identity))
+            )
+            operations = operations[order]
+        # Select a subset of those equivalent rotations
+        if who is not None and np.size(who) > 0:
+            operations = operations[np.atleast_1d(who)]
+        return operations
 
     def unitCell(self):
         """Return unit cell edges
@@ -179,7 +121,7 @@ class Symmetry:
             unitCell = [[None]]
         return unitCell
 
-    def equivalentQuaternions(self, quaternion, who=[]):
+    def equivalentQuaternions(self, quaternion, who=None):
         '''
         List of symmetrically equivalent quaternions based on own symmetry.
         '''
@@ -189,8 +131,8 @@ class Symmetry:
         '''
         Check whether given Rodrigues vector falls into fundamental zone of own symmetry.
         '''
-        if isinstance(R, Quaternion):
-            R = R.asRodrigues()      # translate accidentally passed quaternion
+        if isinstance(R, Rotation):
+            R = as_rodrigues(R)
         # fundamental zone in Rodrigues space is point symmetric around origin
         R = abs(R)
         if self.lattice == 'cubic':
@@ -220,8 +162,8 @@ class Symmetry:
         Representation of Orientation and Disorientation Data for Cubic, Hexagonal, Tetragonal and Orthorhombic Crystals
         Acta Cryst. (1991). A47, 780-789
         '''
-        if isinstance(R, Quaternion):
-            R = R.asRodrigues()       # translate accidentally passed quaternion
+        if isinstance(R, Rotation):
+            R = as_rodrigues(R)
         epsilon = 0.0
         if self.lattice == 'cubic':
             return R[0] >= R[1]+epsilon and R[1] >= R[2]+epsilon and R[2] >= epsilon

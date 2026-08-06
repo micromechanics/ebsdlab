@@ -6,6 +6,10 @@ Tutorial EBSD
 
 The examples demonstrate how to read EBSD files, plot inverse pole figures, and interact with the data in the file.
 
+The ``EBSD.quaternions`` attribute is a vector of
+``scipy.spatial.transform.Rotation`` containing one rotation per map
+point.
+
 
 Example: Read EBSD data and plot the ND IPF
 -------------------------------------------

@@ -6,7 +6,7 @@ dependencies:
   - python>=3.10
   - pillow
   - numpy
-  - scipy
+  - scipy>=1.14
   - matplotlib
   # Development dependencies
   - sphinx

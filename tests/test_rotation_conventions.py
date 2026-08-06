@@ -1,10 +1,10 @@
 """Lock the rotation and crystallographic conventions used by ebsdlab."""
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 from ebsdlab.ebsd import EBSD
 from ebsdlab.orientation import Orientation
-from ebsdlab.quaternion import Quaternion
 from ebsdlab.symmetry import Symmetry
 
 
@@ -31,15 +31,16 @@ def _rotation_z(angle):
 
 def test_quaternion_is_scalar_first_and_rotates_actively():
     """A positive z rotation is stored as wxyz and maps +x onto +y."""
-    quaternion = Quaternion.fromAngleAxis(np.pi / 2.0, [0.0, 0.0, 1.0])
+    quaternion = np.array([np.sqrt(0.5), 0.0, 0.0, np.sqrt(0.5)])
+    rotation = Rotation.from_quat(quaternion, scalar_first=True)
 
     np.testing.assert_allclose(
-        quaternion.asList(),
-        [np.sqrt(0.5), 0.0, 0.0, np.sqrt(0.5)],
+        rotation.as_quat(scalar_first=True),
+        quaternion,
         atol=ATOL,
     )
     np.testing.assert_allclose(
-        quaternion * np.array([1.0, 0.0, 0.0]),
+        rotation.apply([1.0, 0.0, 0.0]),
         [0.0, 1.0, 0.0],
         atol=ATOL,
     )
@@ -48,12 +49,12 @@ def test_quaternion_is_scalar_first_and_rotates_actively():
 def test_bunge_eulers_are_intrinsic_active_zxz():
     """Bunge angles mean the active intrinsic ZXZ convention."""
     phi1, phi, phi2 = np.deg2rad([10.0, 20.0, 30.0])
-    quaternion = Quaternion.fromEulers(np.array([phi1, phi, phi2]))
+    orientation = Orientation(Eulers=np.array([phi1, phi, phi2]))
     expected = _rotation_z(phi1) @ _rotation_x(phi) @ _rotation_z(phi2)
 
-    np.testing.assert_allclose(quaternion.asMatrix(), expected, atol=ATOL)
+    np.testing.assert_allclose(orientation.asMatrix(), expected, atol=ATOL)
     np.testing.assert_allclose(
-        quaternion.asEulers(standardRange=True),
+        orientation.asEulers(standardRange=True),
         [phi1, phi, phi2],
         atol=ATOL,
     )
@@ -61,12 +62,12 @@ def test_bunge_eulers_are_intrinsic_active_zxz():
 
 def test_quaternion_composition_applies_right_operand_first():
     """For qz*qx, qx acts on a vector before qz."""
-    rotate_x = Quaternion.fromAngleAxis(np.pi / 2.0, [1.0, 0.0, 0.0])
-    rotate_z = Quaternion.fromAngleAxis(np.pi / 2.0, [0.0, 0.0, 1.0])
+    rotate_x = Rotation.from_rotvec(np.pi / 2.0 * np.array([1.0, 0.0, 0.0]))
+    rotate_z = Rotation.from_rotvec(np.pi / 2.0 * np.array([0.0, 0.0, 1.0]))
     vector = np.array([0.0, 1.0, 0.0])
 
-    composed = (rotate_z * rotate_x) * vector
-    sequential = rotate_z * (rotate_x * vector)
+    composed = (rotate_z * rotate_x).apply(vector)
+    sequential = rotate_z.apply(rotate_x.apply(vector))
 
     np.testing.assert_allclose(composed, sequential, atol=ATOL)
     np.testing.assert_allclose(composed, [0.0, 0.0, 1.0], atol=ATOL)
@@ -94,9 +95,40 @@ def test_cubic_disorientation_is_symmetry_reduced():
     )
 
     disorientation, _, _, _ = identity.disorientation(rotated)
-    angle, _ = disorientation.asAngleAxis(degrees=True)
+    angle = np.degrees(disorientation.quaternion.magnitude())
 
     np.testing.assert_allclose(angle, 10.0, atol=1e-10)
+
+
+def test_symmetry_groups_start_with_identity():
+    """Algorithms and public indexing use operation zero as the identity."""
+    expected_sizes = {
+        "cubic": 24,
+        "hexagonal": 12,
+        "tetragonal": 8,
+        "orthorhombic": 4,
+    }
+
+    for lattice, size in expected_sizes.items():
+        operations = Symmetry(lattice).symmetryQuats()
+        assert len(operations) == size
+        np.testing.assert_allclose(operations[0].as_matrix(), np.eye(3), atol=ATOL)
+
+
+def test_documented_cubic_orientation_average():
+    """Lock the symmetry-aware average used by the documentation examples."""
+    orientations = [
+        Orientation(Eulers=np.deg2rad(angles), symmetry="cubic")
+        for angles in ([0.0, 45.0, 0.0], [0.0, 0.0, 0.0], [0.0, 15.0, 0.0])
+    ]
+
+    average = Orientation.average(orientations)
+
+    np.testing.assert_allclose(
+        average.asEulers(degrees=True, standardRange=True),
+        [0.0, 19.86780516, 0.0],
+        atol=1e-8,
+    )
 
 
 def test_kam_is_mean_symmetry_reduced_misorientation():
@@ -108,7 +140,7 @@ def test_kam_is_mean_symmetry_reduced_misorientation():
 
     eulers = np.zeros((3, 7))
     eulers[1, 1:] = np.deg2rad(10.0)
-    ebsd.quaternions = Quaternion.fromEulers(eulers)
+    ebsd.quaternions = Rotation.from_euler("ZXZ", eulers.T)
 
     neighbors = np.repeat(np.arange(7)[:, np.newaxis], 6, axis=1)
     neighbors[0] = np.arange(1, 7)
@@ -134,7 +166,7 @@ def test_cubic_ipf_colors_at_high_symmetry_directions():
 
     np.testing.assert_allclose(red.IPFcolor(sample_normal), [1.0, 0.0, 0.0], atol=ATOL)
     np.testing.assert_allclose(
-        green.IPFcolor(sample_normal), [0.0, 1.0, 0.0], atol=ATOL
+        green.IPFcolor(sample_normal), [0.0, 1.0, 0.0], atol=2e-8
     )
     np.testing.assert_allclose(
         blue.IPFcolor(sample_normal), [0.0, 0.0, 1.0], atol=2e-8

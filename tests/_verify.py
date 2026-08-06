@@ -23,7 +23,7 @@
 # e.cropVMask(xmin=20, xmax=20.2, ymin=14.3, ymax=14.4)
 # e.y[e.vMask]  # verify y: correct if rounding accounted for
 # # array([14.37602])
-# angle = e.quaternions[e.vMask].asEulers().flatten()
+# angle = e.quaternions[e.vMask].as_euler("ZXZ").flatten()
 # print(np.round(np.degrees(angle)))  # convert to only positive values
 # # [ -42.  125. -140.]
 # print(np.round(np.degrees(angle)+np.array([360, 0, 360])))

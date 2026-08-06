@@ -15,14 +15,3 @@ API Reference
    :members:
    :undoc-members:
    :show-inheritance:
-
-
-.. automodule:: ebsdlab.quaternion
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: ebsdlab.rodrigues
-   :members:
-   :undoc-members:
-   :show-inheritance:
