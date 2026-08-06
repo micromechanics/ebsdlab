@@ -1,0 +1,141 @@
+"""Lock the rotation and crystallographic conventions used by ebsdlab."""
+
+import numpy as np
+
+from ebsdlab.ebsd import EBSD
+from ebsdlab.orientation import Orientation
+from ebsdlab.quaternion import Quaternion
+from ebsdlab.symmetry import Symmetry
+
+
+ATOL = 1e-12
+
+
+def _rotation_x(angle):
+    """Return an active right-handed rotation about x."""
+    cosine = np.cos(angle)
+    sine = np.sin(angle)
+    return np.array(
+        [[1.0, 0.0, 0.0], [0.0, cosine, -sine], [0.0, sine, cosine]]
+    )
+
+
+def _rotation_z(angle):
+    """Return an active right-handed rotation about z."""
+    cosine = np.cos(angle)
+    sine = np.sin(angle)
+    return np.array(
+        [[cosine, -sine, 0.0], [sine, cosine, 0.0], [0.0, 0.0, 1.0]]
+    )
+
+
+def test_quaternion_is_scalar_first_and_rotates_actively():
+    """A positive z rotation is stored as wxyz and maps +x onto +y."""
+    quaternion = Quaternion.fromAngleAxis(np.pi / 2.0, [0.0, 0.0, 1.0])
+
+    np.testing.assert_allclose(
+        quaternion.asList(),
+        [np.sqrt(0.5), 0.0, 0.0, np.sqrt(0.5)],
+        atol=ATOL,
+    )
+    np.testing.assert_allclose(
+        quaternion * np.array([1.0, 0.0, 0.0]),
+        [0.0, 1.0, 0.0],
+        atol=ATOL,
+    )
+
+
+def test_bunge_eulers_are_intrinsic_active_zxz():
+    """Bunge angles mean the active intrinsic ZXZ convention."""
+    phi1, phi, phi2 = np.deg2rad([10.0, 20.0, 30.0])
+    quaternion = Quaternion.fromEulers(np.array([phi1, phi, phi2]))
+    expected = _rotation_z(phi1) @ _rotation_x(phi) @ _rotation_z(phi2)
+
+    np.testing.assert_allclose(quaternion.asMatrix(), expected, atol=ATOL)
+    np.testing.assert_allclose(
+        quaternion.asEulers(standardRange=True),
+        [phi1, phi, phi2],
+        atol=ATOL,
+    )
+
+
+def test_quaternion_composition_applies_right_operand_first():
+    """For qz*qx, qx acts on a vector before qz."""
+    rotate_x = Quaternion.fromAngleAxis(np.pi / 2.0, [1.0, 0.0, 0.0])
+    rotate_z = Quaternion.fromAngleAxis(np.pi / 2.0, [0.0, 0.0, 1.0])
+    vector = np.array([0.0, 1.0, 0.0])
+
+    composed = (rotate_z * rotate_x) * vector
+    sequential = rotate_z * (rotate_x * vector)
+
+    np.testing.assert_allclose(composed, sequential, atol=ATOL)
+    np.testing.assert_allclose(composed, [0.0, 0.0, 1.0], atol=ATOL)
+
+
+def test_inverse_pole_uses_the_inverse_orientation():
+    """A sample direction is mapped back into the crystal frame."""
+    orientation = Orientation(
+        Eulers=np.deg2rad(np.array([0.0, 90.0, 0.0])), symmetry=None
+    )
+
+    pole, symmetry_index = orientation.inversePole(
+        np.array([0.0, 0.0, 1.0]), SST=False
+    )
+
+    np.testing.assert_allclose(pole, [0.0, 1.0, 0.0], atol=ATOL)
+    assert symmetry_index == 0
+
+
+def test_cubic_disorientation_is_symmetry_reduced():
+    """A 100 degree z rotation is 10 degrees from a cubic equivalent."""
+    identity = Orientation(Eulers=np.zeros(3), symmetry="cubic")
+    rotated = Orientation(
+        Eulers=np.deg2rad(np.array([100.0, 0.0, 0.0])), symmetry="cubic"
+    )
+
+    disorientation, _, _, _ = identity.disorientation(rotated)
+    angle, _ = disorientation.asAngleAxis(degrees=True)
+
+    np.testing.assert_allclose(angle, 10.0, atol=1e-10)
+
+
+def test_kam_is_mean_symmetry_reduced_misorientation():
+    """A point surrounded by six ten-degree neighbors has a KAM of ten."""
+    ebsd = EBSD.__new__(EBSD)
+    ebsd.x = np.arange(7, dtype=float)
+    ebsd.CI = np.ones(7)
+    ebsd.sym = [Symmetry("cubic")]
+
+    eulers = np.zeros((3, 7))
+    eulers[1, 1:] = np.deg2rad(10.0)
+    ebsd.quaternions = Quaternion.fromEulers(eulers)
+
+    neighbors = np.repeat(np.arange(7)[:, np.newaxis], 6, axis=1)
+    neighbors[0] = np.arange(1, 7)
+    ebsd.neighbors = lambda: neighbors
+
+    ebsd.calcKAM()
+
+    np.testing.assert_allclose(ebsd.kam[0], 10.0, atol=1e-10)
+    np.testing.assert_allclose(ebsd.kam[1:], 0.0, atol=ATOL)
+
+
+def test_cubic_ipf_colors_at_high_symmetry_directions():
+    """The cubic [001], [101], and [111] corners are red, green, blue."""
+    red = Orientation(Eulers=np.zeros(3), symmetry="cubic")
+    green = Orientation(
+        Eulers=np.array([0.0, np.pi / 4.0, 0.0]), symmetry="cubic"
+    )
+    blue = Orientation(
+        Eulers=np.array([0.0, np.arccos(1.0 / np.sqrt(3.0)), np.pi / 4.0]),
+        symmetry="cubic",
+    )
+    sample_normal = [0.0, 0.0, 1.0]
+
+    np.testing.assert_allclose(red.IPFcolor(sample_normal), [1.0, 0.0, 0.0], atol=ATOL)
+    np.testing.assert_allclose(
+        green.IPFcolor(sample_normal), [0.0, 1.0, 0.0], atol=ATOL
+    )
+    np.testing.assert_allclose(
+        blue.IPFcolor(sample_normal), [0.0, 0.0, 1.0], atol=2e-8
+    )

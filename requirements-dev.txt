@@ -13,3 +13,4 @@ pre-commit
 requests
 isort
 mypy
+pytest
