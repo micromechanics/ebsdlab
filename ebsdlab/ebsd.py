@@ -730,6 +730,7 @@ class EBSD:
            widthPixel: horizontal size of the image [default: 256 pixel]
            interpolationType: interpolation type [default: "nearest"]
            fileName: save to file instead of showing
+           show: show the figure when no output file is requested [default: True]
         """
         # create a new grid with the given resolution
         xMax = np.max(self.x[self.vMask])
@@ -764,7 +765,8 @@ class EBSD:
         ax.imshow(self.image, extent=[xMin, xMax, yMax, yMin], origin='upper')
         return fig
 
-    def plotIPF(self, direction='ND', widthPixel=None, fileName=None, interpolationType='nearest'):
+    def plotIPF(self, direction='ND', widthPixel=None, fileName=None,
+                interpolationType='nearest', show=True):
         """
         plot Inverse Pole Figure (IPF)
 
@@ -802,12 +804,51 @@ class EBSD:
                     flags[~flags] = flags_
         fig = self.plotRGB(rgbs, widthPixel, interpolationType, fileName)
         print('Duration plotIPF: ', int(np.round(time.time()-startTime)), 'sec')
-        if fileName == None:
+        if fileName == None and show:
             plt.show()
-        else:
+        elif fileName is not None:
             plt.savefig(fileName, dpi=150, bbox_inches='tight')
             plt.close()
         return fig
+
+
+    def addUnitCellOverlay(self, ax, x, y, scale=1., colorCube='black'):
+        """Draw the nearest orientation's unit cell onto an existing IPF axis.
+
+        This is the composable counterpart to :meth:`addSymbol`. It is useful
+        for applications which manage the figure themselves, such as the GUI.
+        """
+        def plotLine(start, delta, color='k', lw=1):
+            ax.plot([start[0]]+[start[0]+delta[0]],
+                    [start[1]]+[start[1]+delta[1]], color=color, lw=lw)
+
+        iClose = np.argmin((self.x-x)**2 + (self.y-y)**2)
+        iQuaternion = self.quaternions[iClose]
+        for sym in self.sym:
+            if sym.lattice is None:
+                continue
+            for line in sym.unitCell():
+                start = iQuaternion.apply(np.array(line[:3], dtype=float)*scale)
+                end = iQuaternion.apply(np.array(line[3:], dtype=float)*scale)
+                # OIM coordinate system and ``imshow(origin='upper')``.
+                start = np.array([-start[1], -start[0], start[2]])
+                end = np.array([-end[1], -end[0], end[2]])
+                location = np.array([x, y, 0])
+                if start[2] < 0 and end[2] < 0:
+                    plotLine(start+location, end-start, color=colorCube, lw=0.2)
+                elif start[2] > 0 and end[2] > 0:
+                    plotLine(start+location, end-start, color=colorCube, lw=2)
+                else:
+                    delta = end-start
+                    mid = start+(-start[2]/delta[2])*delta
+                    if start[2] > 0:
+                        plotLine(start+location, mid-start, color=colorCube, lw=2)
+                        plotLine(mid+location, end-mid, color=colorCube, lw=0.2)
+                    else:
+                        plotLine(start+location, mid-start, color=colorCube, lw=0.2)
+                        plotLine(mid+location, end-mid, color=colorCube, lw=2)
+        return iClose
+
 
     def addSymbol(self, x, y, fileName=None, scale=1., colorCube='black'):
         """
@@ -821,12 +862,6 @@ class EBSD:
            scale: scale of symbol
            colorCube: color of symbol
         """
-        def plotLine(ax, start, delta, color='k', lw=1):
-            ax.plot([start[0]]+[start[0]+delta[0]],
-                    [start[1]]+[start[1]+delta[1]],
-                    color=color, lw=lw)
-            return
-
         def trim(im):
             bg = Image.new(im.mode, im.size, im.getpixel((0, 0)))
             diff = ImageChops.difference(im.convert('RGB'), bg.convert('RGB'))
@@ -847,35 +882,7 @@ class EBSD:
         iQuaternion = self.quaternions[iClose]
         print('Euler angles at point:',
               np.round(as_bunge_eulers(iQuaternion, degrees=True), 1))
-        loc = np.array([x, y, 0])
-        for sym in self.sym:
-            if sym.lattice is None:
-                continue
-            for line in sym.unitCell():
-                start = iQuaternion.apply(np.array(line[:3], dtype=float)*scale)
-                end = iQuaternion.apply(np.array(line[3:], dtype=float)*scale)
-                # use OIM coordinate system: up-left: new vector (-y, x, z)
-                # use imshow with upper origin: second coordinate negative -> (-y, -x, z)
-                start = np.array([-start[1], -start[0],  start[2]])
-                end = np.array([-end[1],   -end[0],    end[2]])
-                # once the orientation of crystal is correct: add location
-                if start[2] < 0 and end[2] < 0:
-                    plotLine(ax, start+loc, end-start, color=colorCube, lw=0.2)
-                elif start[2] > 0 and end[2] > 0:
-                    plotLine(ax, start+loc, end-start, color=colorCube, lw=2)
-                else:
-                    delta = end-start
-                    k = -start[2]/delta[2]
-                    mid = start+k*delta
-                    if start[2] > 0:
-                        plotLine(ax, start+loc, mid-start,
-                                 color=colorCube, lw=2)
-                        plotLine(ax, mid+loc,   end-mid,
-                                 color=colorCube, lw=0.2)
-                    else:
-                        plotLine(ax, start+loc, mid-start,
-                                 color=colorCube, lw=0.2)
-                        plotLine(ax, mid+loc,   end-mid, color=colorCube, lw=2)
+        self.addUnitCellOverlay(ax, x, y, scale, colorCube)
         ax.set_xticks([])
         ax.set_yticks([])
         ax.axis('off')
@@ -960,6 +967,31 @@ class EBSD:
             plt.close()
         return fig
 
+    def addScaleBarOverlay(self, ax, barLength=None, site='lower left'):
+        """Add a scale bar to an existing map axis.
+
+        Unlike :meth:`addScaleBar`, this preserves the supplied Matplotlib
+        figure and is therefore suitable for interactive applications.
+
+        Args:
+           ax: Matplotlib axis containing an EBSD map in micrometres.
+           barLength: scale-bar length in micrometres; calculated if omitted.
+           site: Matplotlib anchored-artists location, e.g. ``"lower left"``.
+        """
+        from matplotlib.font_manager import FontProperties
+        from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+
+        if barLength is None:
+            digits = int(math.log10(round(self.width/4.)))
+            barLength = round(max(self.width, self.height) / 6., -digits)
+        scaleBar = AnchoredSizeBar(ax.transData, barLength,
+                                  str(barLength)+' '+'\u03BC'+'m', site,
+                                  pad=0.5, color='black', frameon=True,
+                                  size_vertical=barLength/30.,
+                                  fontproperties=FontProperties(size=8))
+        ax.add_artist(scaleBar)
+        return scaleBar
+
     def plotPF(self, axis=[1, 0, 0], points=False, fileName=None, color='#1f77b4', alpha=1.0, show=True, density=256, size=2, proj2D='up-left', vmin=0.0, vmax=1.0):
         """
         plot pole figure
@@ -1043,13 +1075,12 @@ class EBSD:
             # filter out low values to make transparent
             img[img < vmin] = np.nan
             ax.imshow(img, cmap=cmap, alpha=alpha,
-                      vmin=0.0, vmax=vmax, origin='lower')
-            ax.plot(center*np.cos(np.linspace(0, 2*np.pi, 100))+center+size,
-                    center*np.sin(np.linspace(0, 2*np.pi, 100))+center+size, 'k-', lw=2)
-            ax.plot([center+size, center+size],
-                    [size, imgDim-size], 'k--', lw=1)
-            ax.plot([size, imgDim-size],
-                    [center+size, center+size], 'k--', lw=1)
+                      vmin=0.0, vmax=vmax, origin='lower',
+                      extent=[-1, 1, -1, 1])
+            ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
+                    np.sin(np.linspace(0, 2*np.pi, 100)), 'k-', lw=2)
+            ax.plot([0, 0], [-1, 1], 'k--', lw=1)
+            ax.plot([-1, 1], [0, 0], 'k--', lw=1)
             # plt.colorbar()
         ax.set_aspect('equal', adjustable='box')
         ax.set_xlim([-1, 1])
@@ -1058,9 +1089,9 @@ class EBSD:
         ax.set_yticks([])
         ax.axis('off')
         print('Duration plotPF: ', int(np.round(time.time()-startTime)), 'sec')
-        if fileName == None:
+        if fileName == None and show:
             plt.show()
-        else:
+        elif fileName is not None:
             plt.savefig(fileName, dpi=150, bbox_inches='tight')
             plt.clf()
             plt.cla()

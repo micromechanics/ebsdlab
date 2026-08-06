@@ -101,6 +101,20 @@ After that, the package can be imported and used in Python codes as
 >>> emap.plot(emap.CI)
 ```
 
+### Graphical user interface
+
+For a local desktop interface for common plots, install the optional GUI
+dependency and start the application:
+
+```console
+$ pip install 'ebsdlab[gui]'
+$ ebsdlab-gui
+```
+
+The GUI supports CI maps, IPF maps, and pole figures; it can apply CI/crop/
+preview filters, place unit-cell overlays by clicking an IPF map, and copy the
+equivalent Python code.
+
 ## Development
 Use the local `.venv/` when it has been prepared for this repository, or create an environment with Python >=3.10 and install the development requirements.
 
