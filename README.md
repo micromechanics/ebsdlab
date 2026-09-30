@@ -139,9 +139,16 @@ $ python -m pylint ebsdlab
 ## Issues
 Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may also be documented in this repository when they need to stay alongside the code.
 
+- > One week of work remains
+- Much polishing, incl GUI, Code
+  - Make fast preview clearer
+  - demo code incl. comments and savefig
+- Simplify arguments, only Str as symmetric.py cubic
+- Afterwards mypy
+- Compare to orix, what is better/worse
+- Yapf use for formatting with 110
 - Neighbour and KAM calculations currently require scan rows ordered by x with
-  a decreasing-x reset between rows. Single-row and differently ordered grids
-  are not yet supported.
+  a decreasing-x reset between rows. Single-row and differently ordered grids cannot be supported. -> Exception
 
 ## FAQ
 ### What features I do not envision:

@@ -10,6 +10,9 @@ from scipy.spatial.transform import Rotation
 
 from ._rotation import asRodrigues
 
+# Directions on an SST edge give components of ~1e-17 instead of exactly 0; count them as inside
+SST_TOLERANCE = 1e-12
+
 # Standard stereographic triangle (SST): smallest region representing
 # symmetry-equivalent crystal directions in an inverse pole figure (IPF).
 # The improper basis uses inversion/reflection equivalence and folds opposite directions into one triangle.
@@ -399,15 +402,15 @@ class Symmetry:
             # check both improper ...
             if proper:
                 theComponents = np.dot(basis['improper'], v)
-                inSST = np.all(theComponents >= 0.0, axis=0)
+                inSST = np.all(theComponents >= -SST_TOLERANCE, axis=0)
                 # ... and proper SST
                 if not np.any(inSST):
                     theComponents = np.dot(basis['proper'], v)
             else:
                 theComponents = np.dot(basis['improper'], v)
-                inSST = np.all(theComponents >= 0.0, axis=0)
+                inSST = np.all(theComponents >= -SST_TOLERANCE, axis=0)
                 oppositeComponents = np.dot(basis['improper'], -v)
-                oppositeSST = np.all(oppositeComponents >= 0.0, axis=0)
+                oppositeSST = np.all(oppositeComponents >= -SST_TOLERANCE, axis=0)
                 if np.ndim(inSST) == 0:
                     if not inSST and oppositeSST:
                         theComponents = oppositeComponents
@@ -415,7 +418,7 @@ class Symmetry:
                     useOpposite = ~inSST & oppositeSST
                     theComponents[:, useOpposite] = oppositeComponents[:, useOpposite]
                 inSST = inSST | oppositeSST
-            inSST = np.all(theComponents >= 0.0, axis=0)
+            inSST = np.all(theComponents >= -SST_TOLERANCE, axis=0)
         # have to return color array
         if color:
             if np.any(inSST):

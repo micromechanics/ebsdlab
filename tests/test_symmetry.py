@@ -35,6 +35,20 @@ def test_proper_and_improper_standard_stereographic_triangles():
     assert symmetry.inSST([0.0, 1.0, 1.0], proper=True)
 
 
+def test_sst_edge_is_inside():
+    """Directions on the [100]-[111] edge are inside the SST despite rounding.
+
+    The rounding sign depends on how many vectors are multiplied at once, so test
+    the same batch of background points that standardTriangle uses.
+    """
+    symmetry = Symmetry('cubic')
+    xy = np.array([[0.0, 0.0], [0.1, 0.0], [0.2, 0.0], [0.3, 0.0], [0.4, 0.0], [0.1, 0.1],
+                   [0.2, 0.1], [0.3, 0.1], [0.4, 0.1], [0.2, 0.2], [0.3, 0.2], [0.3, 0.3]])
+    inside, color = symmetry.inSST(symmetry.xyToHKL(xy.T), color=True)
+    assert np.all(inside), f'points {xy[~inside]} should be inside the SST'
+    assert np.all(np.linalg.norm(color, axis=0) > 0.5), 'no SST point should be black'
+
+
 @pytest.mark.mpl_image_compare
 def test_symmetry():
     s = Symmetry('cubic')
