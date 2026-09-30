@@ -167,3 +167,11 @@ def test_low_symmetry_standard_stereographic_regions_and_fundamental_zone():
     assert not Symmetry('monoclinic').inFZ(
         np.array([0.0, np.tan(np.deg2rad(85.0)), 0.0])
     )
+
+
+def test_unknown_symmetry_name_raises():
+    """Typos in lattice names fail loudly instead of silently meaning 'no symmetry'."""
+    assert Symmetry().lattice == ''
+    assert Symmetry('Cubic').lattice == 'cubic'
+    with pytest.raises(ValueError, match='Unknown symmetry'):
+        Symmetry('cubik')

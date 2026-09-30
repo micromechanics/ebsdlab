@@ -222,20 +222,17 @@ def _parallelepipedCell(a: float, b: float, c: float,
 class Symmetry:
     """Material symmetry identified by a human-readable lattice name."""
 
-    def __init__(self, symmetry: str | None = None) -> None:
-        self.lattice: str | None
-        lattice = (
-            LATTICE_ALIASES.get(symmetry.lower(), symmetry.lower())
-            if isinstance(symmetry, str) else None
-        )
-        if lattice in GROUPS:
+    def __init__(self, symmetry: str = '') -> None:
+        """Create a symmetry from a lattice name such as 'cubic'; '' means not identified."""
+        self.lattice = ''
+        if symmetry:
+            lattice = LATTICE_ALIASES.get(symmetry.lower(), symmetry.lower())
+            if lattice not in GROUPS:
+                raise ValueError(f'Unknown symmetry {symmetry!r}. Supported: {", ".join(GROUPS)}')
             self.lattice = lattice
-        else:
-            self.lattice = None
 
     def __copy__(self) -> 'Symmetry':
         return self.__class__(self.lattice)
-    copy = __copy__
 
     def __repr__(self) -> str:
         return str(self.lattice)
@@ -248,7 +245,7 @@ class Symmetry:
     def symmetryQuats(self, who: Any = None) -> Rotation:
         """Return the proper symmetry rotations, with identity at index zero."""
         # Generate all symmetry-equivalent rotation operations
-        config = GROUPS.get(self.lattice) if self.lattice is not None else None
+        config = GROUPS.get(self.lattice)
         operations = (Rotation.create_group(
             config['rotation_group'], axis=config.get('rotation_axis', 'Z')
         ) if config is not None else Rotation.identity(1))
@@ -311,11 +308,9 @@ class Symmetry:
         return [quaternion*q for q in self.symmetryQuats(who)]
 
 
-    def inFZ(self, rotationOrRodrigues: Rotation | np.ndarray) -> bool:
-        """Return whether a Rodrigues vector lies in the fundamental zone (FZ)"""
-        if isinstance(rotationOrRodrigues, Rotation):
-            rotationOrRodrigues = asRodrigues(rotationOrRodrigues)
-        rawRodrigues = np.asarray(rotationOrRodrigues, dtype=float)
+    def inFZ(self, rotation: Rotation) -> bool:
+        """Return whether a rotation lies in the fundamental zone (FZ)"""
+        rawRodrigues = np.asarray(asRodrigues(rotation), dtype=float)
         # fundamental zone in Rodrigues space is point symmetric around origin
         rodrigues = abs(rawRodrigues)
         if self.lattice == 'cubic':
@@ -351,35 +346,34 @@ class Symmetry:
         return True
 
 
-    def inDisorientationSST(self, rotationOrRodrigues: Rotation | np.ndarray) -> bool:
+    def inDisorientationSST(self, rotation: Rotation) -> bool:
         """Return whether a misorientation lies in the standard triangle.
 
         The criteria follow Heinz and Neumann, Acta Cryst. A47 (1991), 780-789.
         """
-        if isinstance(rotationOrRodrigues, Rotation):
-            rotationOrRodrigues = asRodrigues(rotationOrRodrigues)
+        rodrigues = asRodrigues(rotation)
         if self.lattice == 'cubic':
             return bool(
-                rotationOrRodrigues[0] >= rotationOrRodrigues[1]
-                and rotationOrRodrigues[1] >= rotationOrRodrigues[2]
-                and rotationOrRodrigues[2] >= 0.0
+                rodrigues[0] >= rodrigues[1]
+                and rodrigues[1] >= rodrigues[2]
+                and rodrigues[2] >= 0.0
             )
         if self.lattice == 'hexagonal':
             return bool(
-                rotationOrRodrigues[0] >= math.sqrt(3.0)*rotationOrRodrigues[1]
-                and rotationOrRodrigues[1] >= 0.0 and rotationOrRodrigues[2] >= 0.0
+                rodrigues[0] >= math.sqrt(3.0)*rodrigues[1]
+                and rodrigues[1] >= 0.0 and rodrigues[2] >= 0.0
             )
         if self.lattice == 'tetragonal':
             return bool(
-                rotationOrRodrigues[0] >= rotationOrRodrigues[1]
-                and rotationOrRodrigues[1] >= 0.0
-                and rotationOrRodrigues[2] >= 0.0
+                rodrigues[0] >= rodrigues[1]
+                and rodrigues[1] >= 0.0
+                and rodrigues[2] >= 0.0
             )
         if self.lattice == 'orthorhombic':
             return bool(
-                rotationOrRodrigues[0] >= 0.0
-                and rotationOrRodrigues[1] >= 0.0
-                and rotationOrRodrigues[2] >= 0.0
+                rodrigues[0] >= 0.0
+                and rodrigues[1] >= 0.0
+                and rodrigues[2] >= 0.0
             )
         return True
 
@@ -390,7 +384,7 @@ class Symmetry:
         ``proper`` also considers the neighboring proper triangle. With
         ``color=True``, return the membership flags and IPF colors as RGB values.
         """
-        config = GROUPS.get(self.lattice) if self.lattice is not None else None
+        config = GROUPS.get(self.lattice)
         basis = config['sst_bases'] if config is not None else None
         # theComponents = color components; inSST = membership flags
         inSST: Any
@@ -460,7 +454,7 @@ class Symmetry:
         return hkl
 
 
-    def standardTriangle(self, fileName: str | None = None, show: bool = True, stepSize: float = 0.1) -> Any:
+    def standardTriangle(self, fileName: str = '', show: bool = True, stepSize: float = 0.1) -> Any:
         """Plot the colored cubic standard stereographic triangle."""
         if self.lattice != 'cubic':
             print('ERROR: only implemented for cubic lattice')

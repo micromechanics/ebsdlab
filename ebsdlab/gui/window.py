@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox,
                                QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
 from ..ebsd import EBSD, SUPPORTED_SUFFIXES
-from .widgets import RangeSelector
+from .rangeSelector import RangeSelector
 
 
 

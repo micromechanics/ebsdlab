@@ -7,15 +7,8 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 import configparser
-
-try:
-    import requests
-    from requests.structures import CaseInsensitiveDict
-
-except Exception:
-    pass
 
 
 def getVersion() -> str:
@@ -40,21 +33,18 @@ def getVersion() -> str:
 
 def createContributors() -> None:
     """
-    curl -L -H "Accept: application/vnd.github+json"  -H "X-GitHub-Api-Version: 2022-11-28"   https://api.github.com/repos/PASTA-ELN/pasta-eln/contributors
+    curl -L -H "Accept: application/vnd.github+json"  -H "X-GitHub-Api-Version: 2022-11-28"   https://api.github.com/repos/micromechanics/ebsdlab/contributors
     """
     try:
-        headers: CaseInsensitiveDict[str] = CaseInsensitiveDict()
-        headers['Content-Type'] = 'application/json'
-        resp = requests.get(
-            'https://api.github.com/repos/PASTA-ELN/pasta-eln/contributors', headers=headers, timeout=10)
-        if not resp.ok:
-            print('**ERROR: get not successful', resp.reason)
-            return
+        request = Request('https://api.github.com/repos/micromechanics/ebsdlab/contributors',
+                          headers={'Content-Type': 'application/json'})
+        with urlopen(request, timeout=10) as response:  # raises on HTTP errors, caught below
+            contributors = json.loads(response.read())
         with open('CONTRIBUTORS.md', 'w', encoding='utf-8') as fOut:
             fOut.write(
                 '# Contributors\n## Code contributors\nThe following people have contributed code to this project:\n')
             fOut.write('<table border="2"><tr>\n')
-            for idx, user in enumerate(json.loads(resp.text)):
+            for idx, user in enumerate(contributors):
                 userName = user['login']
                 link = user['html_url']
                 avatar = user['avatar_url']

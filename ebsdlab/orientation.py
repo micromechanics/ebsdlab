@@ -13,7 +13,7 @@ from .symmetry import Symmetry
 class Orientation:
     """Orientation class: combination of material symmetry and specific rotation
     """
-    __slots__ = ['quaternion', 'symmetry', 'plot2D', 'eps', 'doctest']
+    __slots__ = ['quaternion', 'symmetry', 'plot2D', 'eps']
 
     # @name CONVENTIONAL ROUTINES
     # @{
@@ -24,7 +24,7 @@ class Orientation:
                  eulers=None,
                  # put any integer to have a fixed seed or True for real random
                  random=False,
-                 symmetry=None,
+                 symmetry='',
                  ):
         # produce random orientation
         if random:
@@ -46,12 +46,10 @@ class Orientation:
         self.symmetry = Symmetry(symmetry)
         self.plot2D = 'down-right'
         self.eps = 1e-6
-        self.doctest = False
         return
 
     def __copy__(self):
         return self.__class__(quaternion=self.quaternion, symmetry=self.symmetry.lattice)
-    copy = __copy__
 
     def __repr__(self):
         matrix = '\n'.join('\t'.join(map(str, self.asMatrix()[i, :])) for i in range(3))
@@ -242,34 +240,13 @@ class Orientation:
         left-down: -x,-y
         3D        : x,y,z
         """
-        if type(x) == list:
-            x, y, z = np.array(x), np.array(y), np.array(z)
-            if self.plot2D == 'down-right':
-                return y, -x
-            elif self.plot2D == 'up-left':
-                return -y, x
-            elif self.plot2D == 'right-up':
-                return x, y
-            elif self.plot2D == 'left-down':
-                return -x, -y
-            elif self.plot2D == '3D':
-                return x, y, z
-            else:
-                print('Error: plot2D not well defined: plotLine')
-        else:
-            if self.plot2D == 'down-right':
-                return y, -x
-            elif self.plot2D == 'up-left':
-                return -y, x
-            elif self.plot2D == 'right-up':
-                return x, y
-            elif self.plot2D == 'left-down':
-                return -x, -y
-            elif self.plot2D == '3D':
-                return x, y, z
-            else:
-                print('Error: plot2D not well defined: plotLine')
-        return
+        x, y, z = np.asarray(x), np.asarray(y), np.asarray(z)
+        projections = {'down-right': (y, -x), 'up-left': (-y, x), 'right-up': (x, y),
+                       'left-down': (-x, -y), '3D': (x, y, z)}
+        if self.plot2D not in projections:
+            print('Error: plot2D not well defined: plotLine')
+            return None
+        return projections[self.plot2D]
 
     def plotLine(self, ax, start, delta, color='k', lw=1, ls='solid', markerSize=None):
         """
@@ -332,7 +309,7 @@ class Orientation:
             ax.text(*(self.project(x+0.1, y, z+s)+(zlabel,)))
         return
 
-    def plot(self, poles=None, unitCell=True, cos=True, annotate=False, plot2D=None, scale=2, fileName=None):
+    def plot(self, poles=None, unitCell=True, cos=True, annotate=False, plot2D='', scale=2, fileName=''):
         """Plot rotated unit-cell in 3D, and possibly the pole-figure and specific poles
 
         Projection onto 2D: cooradinate systems are given as xDirection-yDirection (z follows)
@@ -344,13 +321,13 @@ class Orientation:
            unitCell: plot unit cell
            cos: plot coordinate system
            annotate: annotate poles in pole figure (requires poles given)
-           plot2D: do a normal projection onto 2D plane: [down-right, up-left, None]
+           plot2D: do a normal projection onto 2D plane: [down-right, up-left, right-up, left-down, 3D]; '' keeps the current setting
            scale: scale of pole-figure dome over crystal
            fileName: fileName for image output (if given, image not shown)
         """
         import matplotlib.pyplot as plt
         from mpl_toolkits.mplot3d import Axes3D
-        if plot2D is not None:
+        if plot2D:
             self.plot2D = plot2D
         if self.plot2D == '3D':
             fig = plt.figure()
@@ -398,7 +375,7 @@ class Orientation:
                         scale*np.sin(np.linspace(0., 2.*np.pi, 100)), 'k--')
             # plot poles
             oHelp = Orientation(eulers=np.array(
-                [0., 0., 0.]), symmetry=self.symmetry.__repr__())
+                [0., 0., 0.]), symmetry=self.symmetry.lattice)
             poles = np.array(poles, dtype=float)
             poles /= np.linalg.norm(poles)
             for _, q in enumerate(oHelp.symmetry.equivalentQuaternions(oHelp.quaternion)):
@@ -432,11 +409,7 @@ class Orientation:
         if self.plot2D == '3D':
             ax.set_zlabel('')
             ax.set_zticks([])
-        if self.doctest:
-            plt.savefig('doctest.png')
-            plt.close()
-            return
-        if fileName is not None:
+        if fileName:
             plt.savefig(fileName, dpi=150, bbox_inches='tight')
         else:
             plt.show()
@@ -461,270 +434,5 @@ class Orientation:
                 print(f'   [{angles[0]:5.1f}  {angles[1]:5.1f}  {angles[2]:5.1f}]')
         return
 
-    # @}
-    ##
-    # @name MISC
-    # @{
-
-    def related(self,
-                relationModel,
-                direction,
-                targetSymmetry=None):
-        """Related
-
-        Models:
-          * KS from S. Morito et al./Journal of Alloys and Compounds 5775
-            (2013) S587-S592 DOES THIS PAPER EXISTS?
-          * GT from Y. He et al./Journal of Applied Crystallography (2006). 39, 72-81
-          * GT' from Y. He et al./Journal of Applied Crystallography (2006). 39, 72-81
-          * NW from H. Kitahara et al./Materials Characterization 54 (2005) 378-386
-          * Pitsch from Y. He et al./Acta Materialia 53 (2005) 1179-1190
-          * Bain from Y. He et al./Journal of Applied Crystallography (2006). 39, 72-81
-
-        Args:
-          relationModel: --
-          direction: --
-          targetSymmetry: --
-
-        Returns:
-          vector
-        """
-        if relationModel not in ['KS', 'GT', 'GTdash', 'NW', 'Pitsch', 'Bain']:
-            return None
-        if int(direction) == 0:
-            return None
-        variant = int(abs(direction))-1
-        (me, other) = (0, 1) if direction > 0 else (1, 0)
-        planes = {'KS':
-                  np.array([[[1,  1,  1], [0,  1,  1]],
-                            [[1,  1,  1], [0,  1,  1]],
-                            [[1,  1,  1], [0,  1,  1]],
-                            [[1,  1,  1], [0,  1,  1]],
-                            [[1,  1,  1], [0,  1,  1]],
-                            [[1,  1,  1], [0,  1,  1]],
-                            [[1, -1,  1], [0,  1,  1]],
-                            [[1, -1,  1], [0,  1,  1]],
-                            [[1, -1,  1], [0,  1,  1]],
-                            [[1, -1,  1], [0,  1,  1]],
-                            [[1, -1,  1], [0,  1,  1]],
-                            [[1, -1,  1], [0,  1,  1]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[1,  1, -1], [0,  1,  1]],
-                            [[1,  1, -1], [0,  1,  1]],
-                            [[1,  1, -1], [0,  1,  1]],
-                            [[1,  1, -1], [0,  1,  1]],
-                            [[1,  1, -1], [0,  1,  1]],
-                            [[1,  1, -1], [0,  1,  1]]]),
-                  'GT':
-                  np.array([[[1,  1,  1], [1,  0,  1]],
-                            [[1,  1,  1], [1,  1,  0]],
-                            [[1,  1,  1], [0,  1,  1]],
-                            [[-1, -1,  1], [-1,  0,  1]],
-                            [[-1, -1,  1], [-1, -1,  0]],
-                            [[-1, -1,  1], [0, -1,  1]],
-                            [[-1,  1,  1], [-1,  0,  1]],
-                            [[-1,  1,  1], [-1,  1,  0]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[1, -1,  1], [1,  0,  1]],
-                            [[1, -1,  1], [1, -1,  0]],
-                            [[1, -1,  1], [0, -1,  1]],
-                            [[1,  1,  1], [1,  1,  0]],
-                            [[1,  1,  1], [0,  1,  1]],
-                            [[1,  1,  1], [1,  0,  1]],
-                            [[-1, -1,  1], [-1, -1,  0]],
-                            [[-1, -1,  1], [0, -1,  1]],
-                            [[-1, -1,  1], [-1,  0,  1]],
-                            [[-1,  1,  1], [-1,  1,  0]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[-1,  1,  1], [-1,  0,  1]],
-                            [[1, -1,  1], [1, -1,  0]],
-                            [[1, -1,  1], [0, -1,  1]],
-                            [[1, -1,  1], [1,  0,  1]]]),
-                  'GTdash':
-                  np.array([[[7, 17, 17], [12,  5, 17]],
-                            [[17,  7, 17], [17, 12,  5]],
-                            [[17, 17,  7], [5, 17, 12]],
-                            [[-7, -17, 17], [-12, -5, 17]],
-                            [[-17, -7, 17], [-17, -12,  5]],
-                            [[-17, -17,  7], [-5, -17, 12]],
-                            [[7, -17, -17], [12, -5, -17]],
-                            [[17, -7, -17], [17, -12, -5]],
-                            [[17, -17, -7], [5, -17, -12]],
-                            [[-7, 17, -17], [-12,  5, -17]],
-                            [[-17,  7, -17], [-17, 12, -5]],
-                            [[-17, 17, -7], [-5, 17, -12]],
-                            [[7, 17, 17], [12, 17,  5]],
-                            [[17,  7, 17], [5, 12, 17]],
-                            [[17, 17,  7], [17,  5, 12]],
-                            [[-7, -17, 17], [-12, -17,  5]],
-                            [[-17, -7, 17], [-5, -12, 17]],
-                            [[-17, -17,  7], [-17, -5, 12]],
-                            [[7, -17, -17], [12, -17, -5]],
-                            [[17, -7, -17], [5, -12, -17]],
-                            [[17, -17,  7], [17, -5, -12]],
-                            [[-7, 17, -17], [-12, 17, -5]],
-                            [[-17,  7, -17], [-5, 12, -17]],
-                            [[-17, 17, -7], [-17,  5, -12]]]),
-                  'NW':
-                  np.array([[[1,  1,  1], [0,  1,  1]],
-                            [[1,  1,  1], [0,  1,  1]],
-                            [[1,  1,  1], [0,  1,  1]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[-1,  1,  1], [0,  1,  1]],
-                            [[1, -1,  1], [0,  1,  1]],
-                            [[1, -1,  1], [0,  1,  1]],
-                            [[1, -1,  1], [0,  1,  1]],
-                            [[-1, -1,  1], [0,  1,  1]],
-                            [[-1, -1,  1], [0,  1,  1]],
-                            [[-1, -1,  1], [0,  1,  1]]]),
-                  'Pitsch':
-                  np.array([[[0,  1,  0], [-1,  0,  1]],
-                            [[0,  0,  1], [1, -1,  0]],
-                            [[1,  0,  0], [0,  1, -1]],
-                            [[1,  0,  0], [0, -1, -1]],
-                            [[0,  1,  0], [-1,  0, -1]],
-                            [[0,  0,  1], [-1, -1,  0]],
-                            [[0,  1,  0], [-1,  0, -1]],
-                            [[0,  0,  1], [-1, -1,  0]],
-                            [[1,  0,  0], [0, -1, -1]],
-                            [[1,  0,  0], [0, -1,  1]],
-                            [[0,  1,  0], [1,  0, -1]],
-                            [[0,  0,  1], [-1,  1,  0]]]),
-                  'Bain':
-                  np.array([[[1,  0,  0], [1,  0,  0]],
-                            [[0,  1,  0], [0,  1,  0]],
-                            [[0,  0,  1], [0,  0,  1]]]),
-                  }
-        normals = {'KS':
-                   np.array([[[-1,  0,  1], [-1, -1,  1]],
-                             [[-1,  0,  1], [-1,  1, -1]],
-                             [[0,  1, -1], [-1, -1,  1]],
-                             [[0,  1, -1], [-1,  1, -1]],
-                             [[1, -1,  0], [-1, -1,  1]],
-                             [[1, -1,  0], [-1,  1, -1]],
-                             [[1,  0, -1], [-1, -1,  1]],
-                             [[1,  0, -1], [-1,  1, -1]],
-                             [[-1, -1,  0], [-1, -1,  1]],
-                             [[-1, -1,  0], [-1,  1, -1]],
-                             [[0,  1,  1], [-1, -1,  1]],
-                             [[0,  1,  1], [-1,  1, -1]],
-                             [[0, -1,  1], [-1, -1,  1]],
-                             [[0, -1,  1], [-1,  1, -1]],
-                             [[-1,  0, -1], [-1, -1,  1]],
-                             [[-1,  0, -1], [-1,  1, -1]],
-                             [[1,  1,  0], [-1, -1,  1]],
-                             [[1,  1,  0], [-1,  1, -1]],
-                             [[-1,  1,  0], [-1, -1,  1]],
-                             [[-1,  1,  0], [-1,  1, -1]],
-                             [[0, -1, -1], [-1, -1,  1]],
-                             [[0, -1, -1], [-1,  1, -1]],
-                             [[1,  0,  1], [-1, -1,  1]],
-                             [[1,  0,  1], [-1,  1, -1]]]),
-                   'GT':
-                   np.array([[[-5, -12, 17], [-17, -7, 17]],
-                             [[17, -5, -12], [17, -17, -7]],
-                             [[-12, 17, -5], [-7, 17, -17]],
-                             [[5, 12, 17], [17,  7, 17]],
-                             [[-17,  5, -12], [-17, 17, -7]],
-                             [[12, -17, -5], [7, -17, -17]],
-                             [[-5, 12, -17], [-17,  7, -17]],
-                             [[17,  5, 12], [17, 17,  7]],
-                             [[-12, -17,  5], [-7, -17, 17]],
-                             [[5, -12, -17], [17, -7, -17]],
-                             [[-17, -5, 12], [-17, -17,  7]],
-                             [[12, 17,  5], [7, 17, 17]],
-                             [[-5, 17, -12], [-17, 17, -7]],
-                             [[-12, -5, 17], [-7, -17, 17]],
-                             [[17, -12, -5], [17, -7, -17]],
-                             [[5, -17, -12], [17, -17, -7]],
-                             [[12,  5, 17], [7, 17, 17]],
-                             [[-17, 12, -5], [-17,  7, -17]],
-                             [[-5, -17, 12], [-17, -17,  7]],
-                             [[-12,  5, -17], [-7, 17, -17]],
-                             [[17, 12,  5], [17,  7, 17]],
-                             [[5, 17, 12], [17, 17,  7]],
-                             [[12, -5, -17], [7, -17, -17]],
-                             [[-17, -12,  5], [-17,  7, 17]]]),
-                   'GTdash':
-                   np.array([[[0,  1, -1], [1,  1, -1]],
-                             [[-1,  0,  1], [-1,  1,  1]],
-                             [[1, -1,  0], [1, -1,  1]],
-                             [[0, -1, -1], [-1, -1, -1]],
-                             [[1,  0,  1], [1, -1,  1]],
-                             [[1, -1,  0], [1, -1, -1]],
-                             [[0,  1, -1], [-1,  1, -1]],
-                             [[1,  0,  1], [1,  1,  1]],
-                             [[-1, -1,  0], [-1, -1,  1]],
-                             [[0, -1, -1], [1, -1, -1]],
-                             [[-1,  0,  1], [-1, -1,  1]],
-                             [[-1, -1,  0], [-1, -1, -1]],
-                             [[0, -1,  1], [1, -1,  1]],
-                             [[1,  0, -1], [1,  1, -1]],
-                             [[-1,  1,  0], [-1,  1,  1]],
-                             [[0,  1,  1], [-1,  1,  1]],
-                             [[-1,  0, -1], [-1, -1, -1]],
-                             [[-1,  1,  0], [-1,  1, -1]],
-                             [[0, -1,  1], [-1, -1,  1]],
-                             [[-1,  0, -1], [-1,  1, -1]],
-                             [[1,  1,  0], [1,  1,  1]],
-                             [[0,  1,  1], [1,  1,  1]],
-                             [[1,  0, -1], [1, -1, -1]],
-                             [[1,  1,  0], [1,  1, -1]]]),
-                   'NW':
-                   np.array([[[2, -1, -1], [0, -1,  1]],
-                             [[-1,  2, -1], [0, -1,  1]],
-                             [[-1, -1,  2], [0, -1,  1]],
-                             [[-2, -1, -1], [0, -1,  1]],
-                             [[1,  2, -1], [0, -1,  1]],
-                             [[1, -1,  2], [0, -1,  1]],
-                             [[2,  1, -1], [0, -1,  1]],
-                             [[-1, -2, -1], [0, -1,  1]],
-                             [[-1,  1,  2], [0, -1,  1]],
-                             [[-1,  2,  1], [0, -1,  1]],
-                             [[-1,  2,  1], [0, -1,  1]],
-                             [[-1, -1, -2], [0, -1,  1]]]),
-                   'Pitsch':
-                   np.array([[[1,  0,  1], [1, -1,  1]],
-                             [[1,  1,  0], [1,  1, -1]],
-                             [[0,  1,  1], [-1,  1,  1]],
-                             [[0,  1, -1], [-1,  1, -1]],
-                             [[-1,  0,  1], [-1, -1,  1]],
-                             [[1, -1,  0], [1, -1, -1]],
-                             [[1,  0, -1], [1, -1, -1]],
-                             [[-1,  1,  0], [-1,  1, -1]],
-                             [[0, -1,  1], [-1, -1,  1]],
-                             [[0,  1,  1], [-1,  1,  1]],
-                             [[1,  0,  1], [1, -1,  1]],
-                             [[1,  1,  0], [1,  1, -1]]]),
-                   'Bain':
-                   np.array([[[0,  1,  0], [0,  1,  1]],
-                             [[0,  0,  1], [1,  0,  1]],
-                             [[1,  0,  0], [1,  1,  0]]]),
-                   }
-        # map(float, planes[...]) does not work in python 3
-        myPlane = [float(i) for i in planes[relationModel][variant, me]]
-        myPlane /= np.linalg.norm(myPlane)
-        # map(float, planes[...]) does not work in python 3
-        myNormal = [float(i) for i in normals[relationModel][variant, me]]
-        myNormal /= np.linalg.norm(myNormal)
-        myMatrix = np.array([myPlane, myNormal, np.cross(myPlane, myNormal)])
-        # map(float, planes[...]) does not work in python 3
-        otherPlane = [float(i) for i in planes[relationModel][variant, other]]
-        otherPlane /= np.linalg.norm(otherPlane)
-        # map(float, planes[...]) does not work in python 3
-        otherNormal = [float(i)
-                       for i in normals[relationModel][variant, other]]
-        otherNormal /= np.linalg.norm(otherNormal)
-        otherMatrix = np.array(
-            [otherPlane, otherNormal, np.cross(otherPlane, otherNormal)])
-        rot = np.dot(otherMatrix.T, myMatrix)
-        # no symmetry information ??
-        return Orientation(matrix=np.dot(rot, self.asMatrix()))
 
     # @}

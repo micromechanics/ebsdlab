@@ -76,7 +76,7 @@ def test_quaternion_composition_applies_right_operand_first():
 def test_inverse_pole_uses_the_inverse_orientation():
     """A sample direction is mapped back into the crystal frame."""
     orientation = Orientation(
-        eulers=np.deg2rad(np.array([0.0, 90.0, 0.0])), symmetry=None
+        eulers=np.deg2rad(np.array([0.0, 90.0, 0.0])), symmetry=''
     )
 
     pole, symmetry_index = orientation.inversePole(
