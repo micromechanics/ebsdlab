@@ -10,7 +10,7 @@ Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in s
 ## Features:
   - File formats accepted .ang | .osc | .crc | .txt
   - can write .ang for FCC. Others could be added
-  - fast plotting interaction using virtual mask (only used for plotting)
+  - fast plotting: maps are drawn directly from the scan grid; virtual mask (only used for plotting)
     - increases speed in intermediate test plots
     - can be removed just before final plotting
   - verified with the OIM software and mTex
@@ -139,16 +139,16 @@ $ python -m pylint ebsdlab
 ## Issues
 Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may also be documented in this repository when they need to stay alongside the code.
 
-- > One week of work remains
 - Much polishing, incl GUI, Code
   - Make fast preview clearer
   - demo code incl. comments and savefig
-- Simplify arguments, only Str as symmetric.py cubic
 - Afterwards mypy
 - Compare to orix, what is better/worse
 - Yapf use for formatting with 110
 - Neighbour and KAM calculations currently require scan rows ordered by x with
   a decreasing-x reset between rows. Single-row and differently ordered grids cannot be supported. -> Exception
+- Implicit grid coordinates: done (storage, loaders, `xy()`, neighbors, KAM, map plotting). Open:
+  - Unordered or partial `.txt` exports now raise; sort them or keep explicit `x`, `y` if needed.
 
 ## FAQ
 ### What features I do not envision:

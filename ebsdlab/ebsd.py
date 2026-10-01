@@ -6,11 +6,13 @@ import math
 import os
 import time
 from pathlib import Path
+from typing import Any
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.ndimage as ndi
 from matplotlib import colors
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from scipy.interpolate import griddata
 from scipy.spatial.transform import Rotation
 from ._rotation import asBungeEulers, asRodrigues
@@ -29,7 +31,7 @@ class EBSD:
     ##
     # @name INPUT METHODS
     # @{
-    def __init__(self, fileName, symmetry=''):
+    def __init__(self, fileName: str | Path, symmetry: str = '') -> None:
         """
         read input file <br>
         initialize things<br>
@@ -42,25 +44,31 @@ class EBSD:
                When supplied, it overrides symmetry read from the file.
         """
         # initialize
-        self.meta = None
-        self.phi1 = None
-        self.phi = None
-        self.phi2 = None
-        self.y = None
-        self.iq = None
-        self.width = None
-        self.ci = None
-        self.phaseID = None
-        self.semSignal = None
-        self.fit = None
-        self.height = None
-        self.ratio = None
-        self.x = None
-        self.stepSizeX = None
-        self.stepSizeY = None
+        self.meta: dict[str, Any] = {}
+        self.phi1: np.ndarray      = np.empty(0)
+        self.phi: np.ndarray       = np.empty(0)
+        self.phi2: np.ndarray      = np.empty(0)
+        self.iq: np.ndarray        = np.empty(0)
+        self.ci: np.ndarray        = np.empty(0)
+        self.phaseID: np.ndarray   = np.empty(0)
+        self.semSignal: np.ndarray = np.empty(0)
+        self.fit: np.ndarray       = np.empty(0)
+        self.width     = 0.0
+        self.height    = 0.0
+        self.ratio     = 0.0
+        self.stepSizeX = 0.0
+        self.stepSizeY = 0.0  # row spacing
+        # grid: coordinates are computed from these instead of being stored, see xy()
+        self.grid = 'SqrGrid'  # or 'HexGrid'
+        self.nPoints = 0
+        self.nRows = 0
+        self.nColsOdd = 0   # points in 1st, 3rd, ... row
+        self.nColsEven = 0  # points in 2nd, 4th, ... row
+        self.x0, self.y0 = 0.0, 0.0
+        self.xOffset = 0.0  # x-shift of even rows: stepSizeX/2 for hexagonal grids
         startTime = time.time()
         self.scanUnit = 'um'
-        self.sym = []
+        self.sym: list[Symmetry] = []
 
         # read input file header and parse it
         self.fileName = str(fileName)
@@ -84,17 +92,9 @@ class EBSD:
         if symmetry:
             self.sym = [Symmetry(symmetry)]
 
-        # basic tests
-        if self.stepSizeY is None:
-            self.stepSizeY = self.stepSizeX
-        if self.stepSizeX < 0.00001 and self.stepSizeY > 0.00001:
-            self.stepSizeX = self.stepSizeY
-        print('   Read file with step size:', self.stepSizeX, self.stepSizeY)
+        print('   Read file with step size:', self.stepSizeX, self.stepSizeY, self.grid)
         print('   Optimal image pixel size:', int(self.width/self.stepSizeX))
-        print('   Number of points:', len(self.x))
-        if np.max(self.x) > 10000.0 or np.max(self.y) > 10000.0:
-            print('Error in reading in ebsd.py (possibly latest version of .osc)')
-            return
+        print('   Number of points:', self.nPoints)
 
         # convert into quaternions and only use that
         eulers = np.vstack((self.phi1, self.phi, self.phi2))
@@ -104,14 +104,66 @@ class EBSD:
         del self.phi2
 
         # for plotting: determine image and imageSize once, use multiple times
-        self.image = None
+        self.image: np.ndarray = np.empty(0)
+        self.imageExtent = (0.0, 0.0, 0.0, 0.0)  # of self.image: left, right, bottom, top in [um]
         self.mask = self.ci > -1  # all are visible initially
-        self.vMask = np.ones_like(self.x, dtype=bool)
-        self.periodicLen = np.where((self.x[1:]-self.x[:-1]) < 0)[0][0]+1
+        self.vMask = np.ones(self.nPoints, dtype=bool)
+        self.vMaskEvery = 1  # preview: maps show only every k-th row and column
         print('   Duration init: ', int(np.round(time.time()-startTime)), 'sec')
         return
 
-    def loadANG(self, fileName=''):
+    def _setGrid(self, x: np.ndarray, y: np.ndarray) -> None:
+        """
+        Derive grid parameters from row-major coordinates; the coordinates themselves are not stored.
+
+        Args:
+           x: x-coordinates of all points
+           y: y-coordinates of all points
+        """
+        rowStarts = np.flatnonzero(np.diff(x) < 0) + 1
+        if len(rowStarts) == 0:
+            raise ValueError('EBSD data must contain more than one scan row.')
+        self.nPoints = len(x)
+        self.nRows = len(rowStarts) + 1
+        self.nColsOdd = int(rowStarts[0])
+        self.nColsEven = int(rowStarts[1] if len(rowStarts) > 1 else len(x)) - self.nColsOdd
+        self.x0, self.y0 = float(x[0]), float(y[0])
+        self.stepSizeX = float(x[1] - x[0])
+        self.stepSizeY = float(y[self.nColsOdd] - y[0])
+        self.xOffset = float(x[self.nColsOdd] - x[0])
+        self.grid = 'HexGrid' if abs(self.xOffset) > self.stepSizeX/10 else 'SqrGrid'
+        xGrid, yGrid = self.xy()
+        if not (np.allclose(xGrid, x, atol=self.stepSizeX/10) and np.allclose(yGrid, y, atol=self.stepSizeY/10)):
+            raise ValueError('EBSD data is not a complete, row-major rectangular or hexagonal grid.')
+        return
+
+    def xy(self, idx: Any = None) -> tuple[np.ndarray, np.ndarray]:
+        """
+        x- and y-coordinates of points, computed from the grid parameters
+
+        Args:
+           idx: point indices [if None: all points]
+
+        Returns:
+           x, y
+        """
+        i = np.arange(self.nPoints) if idx is None else np.asarray(idx)
+        pair, j = np.divmod(i, self.nColsOdd + self.nColsEven)
+        even = j >= self.nColsOdd  # 2nd row of the pair of rows
+        col = j - even*self.nColsOdd
+        return self.x0 + col*self.stepSizeX + even*self.xOffset, self.y0 + (2*pair+even)*self.stepSizeY
+
+    @property
+    def x(self) -> np.ndarray:
+        """x-coordinates of all points"""
+        return self.xy()[0]
+
+    @property
+    def y(self) -> np.ndarray:
+        """y-coordinates of all points"""
+        return self.xy()[1]
+
+    def loadANG(self, fileName: str = '') -> None:
         """
         Load .ang file: filename saved in self. No need to use it
         """
@@ -121,7 +173,7 @@ class EBSD:
         keys = ['MaterialName', 'LatticeConstants',
                 'WorkingDistance', 'SEMVoltage', 'GRID:', 'Symmetry']
         fileHandle = open(self.fileName)
-        keyValues = [''] * len(keys)  # actual values
+        keyValues: list[Any] = [''] * len(keys)  # actual values
         for line in fileHandle:
             if line[0:10] == '# OPERATOR':
                 break
@@ -129,7 +181,7 @@ class EBSD:
                 searchTerm = '# '+key
                 if searchTerm == line[0:len(searchTerm)]:
                     index = keys.index(key)
-                    value = line.rstrip().split()[2:]
+                    value: Any = line.rstrip().split()[2:]
                     if len(value) == 1:
                         value = value[0]
                         try:
@@ -146,23 +198,20 @@ class EBSD:
         self.phi1 = data[:, 0].astype(float)
         self.phi = data[:, 1].astype(float)
         self.phi2 = data[:, 2].astype(float)
-        self.x = data[:, 3].astype(float)
-        self.y = data[:, 4].astype(float)
         self.iq = data[:, 5].astype(float)
         self.ci = data[:, 6].astype(float)
         self.phaseID = data[:, 7].astype(np.uint8)
         self.semSignal = data[:, 8].astype(np.uint8)
         self.fit = data[:, 9].astype(float)
-        self.width = max(self.x)
-        self.height = max(self.y)
+        self.width  = max(data[:, 3])
+        self.height = max(data[:, 4])
         self.ratio = self.width/self.height
-        self.stepSizeX = self.x[1] - self.x[0]
-        self.stepSizeY = None
+        self._setGrid(data[:, 3], data[:, 4])
         fileHandle.close()
         del data
         return
 
-    def loadTXT(self, fileName='', update=False):
+    def loadTXT(self, fileName: str = '', update: bool = False) -> None:
         """
         read txt file and possibly update data. Warning, this resets the mask to the one of the file
 
@@ -180,7 +229,7 @@ class EBSD:
         if not fileName:
             fileName = self.fileName
         fileHandle = open(fileName)
-        foundKeys = {}
+        foundKeys: dict[str, int] = {}
         for line in fileHandle:
             if line[0] != '#':
                 break
@@ -207,13 +256,14 @@ class EBSD:
       then search in sections of equal y
       or subdivide into half, of half of half
       """
+            xs, ys = self.xy()
             for i in range(data.shape[0]):
                 x = data[i, foundKeys['x,'] - 1].astype(float)
                 y = data[i, foundKeys['x,'] - 0].astype(float)
                 # identify index: nice and much much slowes
-                idx = np.argmax(np.logical_and(np.abs(self.x-x) < self.stepSizeX/10.0,
+                idx = np.argmax(np.logical_and(np.abs(xs-x) < self.stepSizeX/10.0,
                                                # very save error of 10th of STEPSIZE
-                                               np.abs(self.y-y) < self.stepSizeX/10.0))
+                                               np.abs(ys-y) < self.stepSizeX/10.0))
                 # update
                 self.mask[idx] = True
                 self.phi1[idx] = data[i,
@@ -242,12 +292,11 @@ class EBSD:
                                              foundKeys['Grain'] - 1].astype(np.float16)
                 # stepSizeX, width, height etc do not change
         else:  # read new
-            self.mask = True
             self.phi1 = data[:, foundKeys['phi1,'] - 1].astype(np.float16)
             self.phi = data[:, foundKeys['phi1,'] - 0].astype(np.float16)
             self.phi2 = data[:, foundKeys['phi1,'] + 1].astype(np.float16)
-            self.x = data[:, foundKeys['x,'] - 1].astype(float)
-            self.y = data[:, foundKeys['x,'] - 0].astype(float)
+            x = data[:, foundKeys['x,'] - 1].astype(float)
+            y = data[:, foundKeys['x,'] - 0].astype(float)
             if 'IQ' in foundKeys:
                 self.iq = data[:, foundKeys['IQ'] - 1].astype(np.float16)
             if 'CI' in foundKeys:
@@ -260,19 +309,16 @@ class EBSD:
             if 'sem' in foundKeys:
                 self.semSignal = data[:,
                                       foundKeys['sem'] - 1].astype(np.float16)
-            self.mask = np.ones_like(self.x, dtype=bool)
-            self.width = max(self.x)
-            self.height = max(self.y)
-            self.ratio = self.width/self.height
-            delta = self.x[1:] - self.x[:-1]
-            # estimate since not ordered
-            self.stepSizeX = np.min(delta[delta > 0])
-            self.stepSizeY = None
+            self.mask   = np.ones_like(x, dtype=bool)
+            self.width  = max(x)
+            self.height = max(y)
+            self.ratio  = self.width/self.height
+            self._setGrid(x, y)
         fileHandle.close()
         print('Duration loadTXT: ', int(np.round(time.time()-startTime)), 'sec')
         return
 
-    def writeANG(self, fileName):
+    def writeANG(self, fileName: str) -> None:
         """
         write body of ang file
 
@@ -291,12 +337,13 @@ class EBSD:
         fileOut.write('# khlFamilies 2 0 0 1 0.0\n')
         fileOut.write('# khlFamilies 2 2 0 1 0.0\n')
         fileOut.write('# khlFamilies 3 1 1 1 0.0\n')
-        fileOut.write('#\n# GRID: HexGrid\n#\n')
-        for i in range(len(self.x)):
+        fileOut.write(f'#\n# GRID: {self.grid}\n#\n')
+        xs, ys = self.xy()
+        for i in range(self.nPoints):
             phi1, phi, phi2 = tuple(asBungeEulers(self.quaternions[i]))
             fileOut.write(
-                f' {phi1:8.5f} {phi:8.5f} {phi2:8.5f} {self.x[i]:12.5f}'
-                f' {self.y[i]:12.5f} {self.iq[i]:8.3f} {self.ci[i]:6.3f}'
+                f' {phi1:8.5f} {phi:8.5f} {phi2:8.5f} {xs[i]:12.5f}'
+                f' {ys[i]:12.5f} {self.iq[i]:8.3f} {self.ci[i]:6.3f}'
                 f' {self.phaseID[i]:2d} {self.semSignal[i]:6d} {self.fit[i]:7.3f}\n'
             )
         fileOut.close()
@@ -304,7 +351,7 @@ class EBSD:
             np.round(time.time()-startTime)), 'sec')
         return
 
-    def loadOSC(self, fileName=''):
+    def loadOSC(self, fileName: str = '') -> None:
         """
         Load .osc file; filename saved in self. No need to use it.
         Copied from mtex and translated into python
@@ -347,20 +394,19 @@ class EBSD:
         self.phi1 = data[:, 0].astype(np.float16)
         self.phi = data[:, 1].astype(np.float16)
         self.phi2 = data[:, 2].astype(np.float16)
-        self.x = data[:, 3].astype(float)
-        self.y = data[:, 4].astype(float)
         self.iq = data[:, 5].astype(np.float16)
         self.ci = data[:, 6].astype(np.float16)
         self.phaseID = data[:, 7].astype(np.float16)
         self.semSignal = data[:, 8].astype(np.float16)  # SEMSignal
         self.fit = data[:, 9].astype(np.float16)  # Fit
-        self.width = max(self.x)
-        self.height = max(self.y)
+        self.width  = float(max(data[:, 3]))
+        self.height = float(max(data[:, 4]))
         self.ratio = self.width/self.height
+        self._setGrid(data[:, 3].astype(float), data[:, 4].astype(float))
         del data
         return
 
-    def loadCRC(self, fileName=''):
+    def loadCRC(self, fileName: str = '') -> None:
         """
         Load .crc file; filename saved in self. No need to use it.
         Copied from mtex and translated into python
@@ -372,7 +418,7 @@ class EBSD:
         if not os.path.exists(cprFileName):
             print('CPR file does not exist')
         cprFile = open(cprFileName)
-        cprData = {}
+        cprData: dict[str, dict[str, Any]] = {}
         for line in cprFile:
             line = line.strip()
             if line[0] == '[':
@@ -445,8 +491,8 @@ class EBSD:
         # coordinates
         xCoordinates = np.arange(xcells)*self.stepSizeX
         yCoordinates = np.arange(ycells)*self.stepSizeY
-        self.x, self.y = np.meshgrid(xCoordinates, yCoordinates)
-        self.x, self.y = self.x.flatten(), self.y.flatten()
+        x, y = np.meshgrid(xCoordinates, yCoordinates)
+        self._setGrid(x.flatten(), y.flatten())
 
         # read data from crcFile: packed little-endian records
         recordType = [('phase', 'u1'), ('phi1', '<f4'), ('phi', '<f4'), ('phi2', '<f4'), ('ci', '<f4'),
@@ -457,28 +503,28 @@ class EBSD:
         self.phaseID = data['phase'].copy()
         self.bc, self.bs, self.bands, self.error = (data[i].copy() for i in ('bc', 'bs', 'bands', 'error'))
         self.phi1, self.phi, self.phi2, self.ci = (data[i].astype(float) for i in ('phi1', 'phi', 'phi2', 'ci'))
-        self.ri = data['ri'].astype(float) if 'ri' in data.dtype.names else np.zeros(numDataPoints)
+        self.ri = data['ri'].astype(float) if 'ri' in (data.dtype.names or ()) else np.zeros(numDataPoints)
         self.iq, self.semSignal, self.fit = (np.zeros(numDataPoints) for _ in range(3))
         if not len(self.sym) == np.max(self.phaseID)-np.min(self.phaseID)+1:
             print('ERRRO in reading CRC: symmetries do not match', len(
                 self.sym), np.max(self.phaseID)-np.min(self.phaseID)+1)
         return
 
-    def loadVoid(self, rotation):
+    def loadVoid(self, rotation: str) -> None:
         """
         rotation angles in degree
         """
-        numPerAxis, distrib = 6, 0
+        numPerAxis, distrib = 6, 0.0
         if '|' in rotation:
-            rotation = [float(i) for i in rotation.split('|')]
-            if len(rotation) == 3:
-                phi1, phi, phi2 = np.radians(rotation)
-            elif len(rotation) == 4:
-                phi1, phi, phi2 = np.radians(rotation[:3])
-                distrib = rotation[-1]
-            elif len(rotation) == 5:
-                phi1, phi, phi2 = np.radians(rotation[:3])
-                distrib, numPerAxis = rotation[-2:]
+            values = [float(i) for i in rotation.split('|')]
+            if len(values) == 3:
+                phi1, phi, phi2 = np.radians(values)
+            elif len(values) == 4:
+                phi1, phi, phi2 = np.radians(values[:3])
+                distrib = values[-1]
+            elif len(values) == 5:
+                phi1, phi, phi2 = np.radians(values[:3])
+                distrib, numPerAxis = values[-2], int(values[-1])
             else:
                 print('ERROR')
                 return
@@ -492,8 +538,8 @@ class EBSD:
         self.stepSizeX = 1.
         numDataPoints = int(numPerAxis**2)
         coordinates = np.arange(numPerAxis)*self.stepSizeX
-        self.x, self.y = np.meshgrid(coordinates, coordinates)
-        self.x, self.y = self.x.flatten(), self.y.flatten()
+        x, y = np.meshgrid(coordinates, coordinates)
+        self._setGrid(x.flatten(), y.flatten())
         self.phaseID = np.ones((numDataPoints), dtype=np.uint8)
         self.phi1 = np.zeros((numDataPoints), dtype=float)+phi1 + \
             np.random.normal(loc=0, scale=distrib, size=numDataPoints)
@@ -502,9 +548,8 @@ class EBSD:
         self.phi2 = np.zeros((numDataPoints), dtype=float)+phi2 + \
             np.random.normal(loc=0, scale=distrib, size=numDataPoints)
         self.ci = np.ones((numDataPoints), dtype=float)
-        self.stepSizeY = self.stepSizeX
-        self.width = np.max(self.x)
-        self.height = np.max(self.y)
+        self.width = np.max(x)
+        self.height = np.max(y)
         self.ratio = self.width/self.height
         return
 
@@ -515,7 +560,7 @@ class EBSD:
     # all points are false.
     # @{
 
-    def maskCI(self, ci):
+    def maskCI(self, ci: float) -> None:
         """
         masked all points off, which have a CI less than: good points=False, bad points=True
 
@@ -525,14 +570,14 @@ class EBSD:
         self.mask = self.ci > ci
         return
 
-    def maskReset(self):
+    def maskReset(self) -> None:
         """
         reset mask
         """
         self.mask = self.ci > -1
         return
 
-    def removePointsOutsideMask(self):
+    def removePointsOutsideMask(self) -> None:
         """
         Set points outside the mask invalid so they are read as nonexistent by
         OIM after export.
@@ -541,18 +586,21 @@ class EBSD:
         self.fit[~self.mask] = 180.0
         return
 
-    def setVMask(self, every=1):
+    def setVMask(self, every: int = 1) -> None:
         """
-        mask every kth point off, for fast plotting, does not influence results in any way
+        fast preview, does not influence results in any way: maps show only every k-th row and column
+        (at any image size), pole figures use every k-th point.
 
         Args:
            every: use only every k-th point. Improves plotting speed. every=1 resets.
         """
         self.vMask[:] = False
         self.vMask[::every] = True
+        self.vMaskEvery = every
         return
 
-    def cropVMask(self, xmin=None, ymin=None, xmax=None, ymax=None):
+    def cropVMask(self, xmin: float | None = None, ymin: float | None = None,
+                  xmax: float | None = None, ymax: float | None = None) -> None:
         """
         crop visible area
 
@@ -563,11 +611,12 @@ class EBSD:
            ymax: maximum y-coordinate
         """
         xmin, ymin = xmin or 0, ymin or 0
-        xmax, ymax = xmax or np.max(self.x), ymax or np.max(self.y)
-        self.vMask = self.vMask & (self.x >= xmin) & (self.x <= xmax) & (self.y >= ymin) & (self.y <= ymax)
+        x, y = self.xy()
+        xmax, ymax = xmax or np.max(x), ymax or np.max(y)
+        self.vMask = self.vMask & (x >= xmin) & (x <= xmax) & (y >= ymin) & (y <= ymax)
         return
 
-    def neighbors(self, idx=None, layers=1):
+    def neighbors(self, idx: int | None = None, layers: int = 1) -> np.ndarray | None:
         """
         identify neighboring indexes
 
@@ -578,34 +627,32 @@ class EBSD:
         Returns:
          array of neighbors; invalid points have a value=-10
         """
-        l = self.periodicLen
-        if layers == 1:
-            if idx is None:
-                original = np.outer(
-                    np.arange(len(self.x), dtype=int), np.ones([6,], dtype=int))
-                neighbors = original.copy()
-                neighbors[:, 0] += -l
-                neighbors[:, 1] += -l+1
-                neighbors[:, 2] += -1
-                neighbors[:, 3] += +1
-                neighbors[:, 4] += +l-1
-                neighbors[:, 5] += +l
-            else:
-                neighbors = np.array([-l, -l+1,  -1, +1,  +l-1, +l])+idx
-        elif layers == 2:
-            neighbors = np.array(
-                [-l-1, -l, -l+1, -l+2,  -2, -1, +1, +2,  +l-2, +l-1, +l, +l+1])+idx
-        else:
+        if layers != 1:
             print('number of layers not implemented')
             return None
-        neighbors[neighbors < 0] = -10
-        neighbors[neighbors >= len(self.x)] = -10
-        # only check for distance in x; b/c check in y already done by previous lines
-        mask = (self.x[neighbors]-self.x[original]) > (self.stepSizeX*1.1)
-        neighbors[mask] = -10
+        i = np.arange(self.nPoints) if idx is None else np.atleast_1d(idx)
+        period = self.nColsOdd + self.nColsEven
+        pair, j = np.divmod(i, period)
+        even = (j >= self.nColsOdd).astype(int)  # 2nd row of the pair of rows
+        row, col = 2*pair + even, j - even*self.nColsOdd
+        if self.grid == 'HexGrid':
+            # first of the two touching columns in the rows above and below; depends on shift direction
+            shift = int(self.xOffset > 0)
+            lower = col + np.where(even, shift-1, -shift)
+            nRow = row[:, None] + np.array([-1, -1, 0, 0, 1, 1])
+            nCol = np.stack([lower, lower+1, col-1, col+1, lower, lower+1], axis=1)
+        else:
+            nRow = row[:, None] + np.array([-1, 0, 0, 1])
+            nCol = np.stack([col, col-1, col+1, col], axis=1)
+        rowLength = np.where(nRow % 2, self.nColsEven, self.nColsOdd)
+        neighbors = (nRow//2)*period + (nRow % 2)*self.nColsOdd + nCol
+        valid = (nRow >= 0) & (nRow < self.nRows) & (nCol >= 0) & (nCol < rowLength) & (neighbors < self.nPoints)
+        neighbors[~valid] = -10
+        if idx is not None:
+            return neighbors[0]
         return neighbors
 
-    def calcKAM(self, layers=1):
+    def calcKAM(self, layers: int = 1) -> None:
         """
         calculate Kerner Average Misorientation in DEGREES (because user focused)
 
@@ -615,14 +662,15 @@ class EBSD:
         startTime = time.time()
         sym = self.sym[0]
         neighbors = self.neighbors()
+        assert neighbors is not None
         fzThreshold = math.sqrt(2.0)-1.0
         angles = np.empty_like(neighbors, dtype=float)
         neighborSymQ = sym.symmetryQuats()
         symQ = neighborSymQ[0]
-        for iNeighbor in range(6):
+        for iNeighbor in range(neighbors.shape[1]):
             neighborQ = self.quaternions[neighbors[:, iNeighbor]]
             misQ = self.quaternions.inv() * neighborQ
-            foundAngle = np.zeros((len(self.x)), dtype=bool)
+            foundAngle = np.zeros(len(self.quaternions), dtype=bool)
             for nSQ in neighborSymQ:
                 candidate = symQ.inv()*misQ*nSQ
                 for theQ in (candidate.inv(), candidate):
@@ -642,6 +690,7 @@ class EBSD:
                     angles[mask, iNeighbor] = np.nan
                 if np.all(foundAngle):
                     break  # stop looking for alternatives if filled already all
+        angles[neighbors < 0] = np.nan  # -10 would index points at the end of the map
         self.kam = np.degrees(np.nanmean(angles, axis=1))
         self.kam[self.ci == -1.0] = np.nan
         print('Duration KAM evaluation: ', int(
@@ -653,11 +702,62 @@ class EBSD:
     # @name PLOT METHODS
     # @{
 
-    def plot(self, vector, widthPixel=None, vmax=None, vmin=None,
-             interpolationType='nearest', cmap=None, show=True, cbar=True):
+    def _image(self, values: np.ndarray, widthPixel: int | None = None,
+               interpolationType: str = 'nearest') -> tuple[np.ndarray, tuple[float, float, float, float]]:
+        """
+        Sample per-point values onto the pixels of an image of the visible area
+
+        Args:
+           values: one value (or one row of values) per point
+           widthPixel: horizontal size of the image [default: one pixel per step; half a step for hexagonal grids]
+           interpolationType: "nearest" uses the grid directly; others interpolate with scipy's griddata
+
+        Returns:
+           image of shape (height, width, ...), extent for imshow in [um]
+        """
+        xVisible, yVisible = self.xy(np.flatnonzero(self.vMask))
+        xLo, xHi = xVisible.min()-self.stepSizeX/2, xVisible.max()+self.stepSizeX/2
+        yLo, yHi = yVisible.min()-self.stepSizeY/2, yVisible.max()+self.stepSizeY/2
+        self.ratio = (xHi-xLo) / (yHi-yLo)
+        if widthPixel is None:
+            pitch = self.stepSizeX/2 if self.grid == 'HexGrid' else self.stepSizeX
+            widthPixel = int(round((xHi-xLo)/pitch))
+            heightPixel = int(round((yHi-yLo)/self.stepSizeY))
+        else:
+            heightPixel = int(round(widthPixel/self.ratio))
+        xAxis = xLo + (np.arange(widthPixel)+0.5)*(xHi-xLo)/widthPixel
+        yAxis = yLo + (np.arange(heightPixel)+0.5)*(yHi-yLo)/heightPixel
+        extent = (xLo, xHi, yHi, yLo)
+        if interpolationType != 'nearest':
+            x, y = np.meshgrid(xAxis, yAxis)
+            return griddata(np.vstack((xVisible, yVisible)).T, values[self.vMask], (x, y), interpolationType), extent
+        if self.vMaskEvery > 1:  # preview: pixels sample only every k-th row and column
+            xBlock, yBlock = self.stepSizeX*self.vMaskEvery, self.stepSizeY*self.vMaskEvery
+            xAxis = xLo + (np.floor((xAxis-xLo)/xBlock)+0.5)*xBlock
+            yAxis = yLo + (np.floor((yAxis-yLo)/yBlock)+0.5)*yBlock
+        return values[self._nearestIndex(xAxis[None, :], yAxis[:, None])], extent
+
+    def _nearestIndex(self, x: Any, y: Any) -> np.ndarray:
+        """
+        Index of the grid point closest to x, y: row from y, then column within that row from x
+
+        Args:
+           x: x-coordinate(s) in [um]; broadcast with y
+           y: y-coordinate(s) in [um]
+        """
+        row = np.clip(np.rint((np.asarray(y)-self.y0)/self.stepSizeY).astype(int), 0, self.nRows-1)
+        even = row % 2
+        col = np.rint((np.asarray(x) - self.x0 - even*self.xOffset)/self.stepSizeX).astype(int)
+        col = np.clip(col, 0, np.where(even, self.nColsEven, self.nColsOdd)-1)
+        idx = (row//2)*(self.nColsOdd+self.nColsEven) + even*self.nColsOdd + col
+        return np.minimum(idx, self.nPoints-1)
+
+    def plot(self, vector: np.ndarray, widthPixel: int | None = None, vmax: float | None = None,
+             vmin: float | None = None, interpolationType: str = 'nearest', cmap: Any = None,
+             show: bool = True, cbar: bool = True) -> Any:
         """
         given a class-vector, plot the vector as an image<br>
-        the x and y are given by the class-vector x and y
+        the x and y are given by the grid
 
         Args:
            vector: vector to be plotted as a 2D image
@@ -667,31 +767,17 @@ class EBSD:
            interpolationType: interpolation type [default: "nearest" next-neighbor]
         """
         startTime = time.time()
-        if widthPixel is None:
-            widthPixel = int(self.width/self.stepSizeX)
-
         # create a special cmap palette with blacK as value for bad-numbers
         if cmap is None:
             cmap = cm.Spectral
             cmap.set_bad('k', 1.0)
-        # create a new grid with the given resolution, and interpolate
-        xMax = np.max(self.x[self.vMask])
-        xMin = np.min(self.x[self.vMask])
-        yMax = np.max(self.y[self.vMask])
-        yMin = np.min(self.y[self.vMask])
-        self.ratio = (xMax-xMin) / (yMax-yMin)
-        heightPixel = int(widthPixel/self.ratio)
-        xAxis = np.linspace(xMin, xMax, widthPixel)
-        yAxis = np.linspace(yMin, yMax, heightPixel)
-        x, y = np.meshgrid(xAxis, yAxis)
-        points = np.vstack((self.x[self.vMask], self.y[self.vMask])).T
-        z = griddata(points, vector[self.vMask],     (x, y), interpolationType)
-        mask = griddata(
-            points, ~self.mask[self.vMask], (x, y), interpolationType)
+        z, self.imageExtent = self._image(vector, widthPixel, interpolationType)
+        z = z.astype(float)
+        mask, _ = self._image(~self.mask, widthPixel, interpolationType)
         # plot if/if-not the maximum and minimum are given
         fig, ax = plt.subplots()
-        im = ax.imshow(np.ma.masked_where(mask, z.astype(float)), extent=[
-            xMin, xMax, yMax, yMin], cmap=cmap, vmax=vmax, vmin=vmin, origin='upper')
+        im = ax.imshow(np.ma.masked_where(mask, z), extent=self.imageExtent, cmap=cmap, vmax=vmax, vmin=vmin,
+                       origin='upper')
         if cbar:
             fig.colorbar(im, ax=ax)
         print('   Plot with x and y axis in [um]')
@@ -699,43 +785,31 @@ class EBSD:
         if show:
             plt.show()
         z *= 255/np.max(z)
-        self.image = z.astype(float)
+        self.image = z
         return fig
 
-    def plotRGB(self, rgb, widthPixel=256):
+    def plotRGB(self, rgb: np.ndarray, widthPixel: int | None = None, interpolationType: str = 'nearest') -> Any:
         """
         given a RGB vector (same size as the other class vectors)
         plot the vector as an image<br>
-        the x and y are given by the class-vector x and y
+        the x and y are given by the grid
         USED INTERNALLY
 
         Args:
            rgb: matrix [3, classVectorSize] to be plotted as a 2D image
-           widthPixel: horizontal size of the image [default: 256 pixel]
+           widthPixel: horizontal size of the image [default: optimal pixel width]
            interpolationType: interpolation type [default: "nearest"]
         """
-        # create a new grid with the given resolution
-        xMax = np.max(self.x[self.vMask])
-        xMin = np.min(self.x[self.vMask])
-        yMax = np.max(self.y[self.vMask])
-        yMin = np.min(self.y[self.vMask])
-        self.ratio = (xMax-xMin) / (yMax-yMin)
-        heightPixel = int(widthPixel/self.ratio)
-        xAxis = np.linspace(xMin, xMax,  widthPixel)
-        yAxis = np.linspace(yMin, yMax,  heightPixel)
-        x, y = np.meshgrid(xAxis, yAxis)
         # masked points are black
         rgb[:, ~self.mask] = 0
-        points = np.vstack((self.x[self.vMask], self.y[self.vMask])).T
-        imageArray = np.uint8(
-            griddata(points, rgb[:, self.vMask].T, (x, y), interpolationType)*255)
-        self.image = imageArray
+        image, self.imageExtent = self._image(rgb.T, widthPixel, interpolationType)
+        self.image = (image*255).astype(np.uint8)
         fig, ax = plt.subplots()
-        ax.imshow(self.image, extent=[xMin, xMax, yMax, yMin], origin='upper')
+        ax.imshow(self.image, extent=self.imageExtent, origin='upper')
         return fig
 
-    def plotIPF(self, direction='ND', widthPixel=None, fileName='',
-                interpolationType='nearest', show=True):
+    def plotIPF(self, direction: str | int = 'ND', widthPixel: int | None = None, fileName: str = '',
+                interpolationType: str = 'nearest', show: bool = True) -> Any:
         """
         plot Inverse Pole Figure (IPF)
 
@@ -753,24 +827,29 @@ class EBSD:
         elif direction == 'ND':
             axis = [0, 0, 1]
         else:  # if first argument specifies widthPixel
-            widthPixel = direction
+            widthPixel = int(direction)
             axis = [0, 0, 1]
-        if widthPixel is None:
-            widthPixel = int(self.width/self.stepSizeX)
 
-        flags = np.zeros((len(self.x)), dtype=bool)
-        rgbs = np.zeros((3, len(self.x)), dtype=float)
+        # colors only for the points shown in the image
+        if interpolationType == 'nearest':
+            shown = np.unique(self._image(np.arange(self.nPoints), widthPixel)[0])
+        else:
+            shown = np.flatnonzero(self.vMask)
+        flags = np.zeros(len(shown), dtype=bool)
+        rgbsShown = np.zeros((3, len(shown)), dtype=float)
         for sym in self.sym:
             if not sym.lattice:
                 continue
-            equivQuaternions = sym.equivalentQuaternions(self.quaternions)
+            equivQuaternions = sym.equivalentQuaternions(self.quaternions[shown])
             for equivQuaternion in equivQuaternions:
                 pole = equivQuaternion.inv().apply(axis)
                 remainingFlags, remainingRgbs = sym.inSST(
                     pole[~flags].T, color=True, proper=False)
                 if len(remainingRgbs.shape) == 2:
-                    rgbs[:, ~flags] = remainingRgbs
+                    rgbsShown[:, ~flags] = remainingRgbs
                     flags[~flags] = remainingFlags
+        rgbs = np.zeros((3, self.nPoints), dtype=float)
+        rgbs[:, shown] = rgbsShown
         fig = self.plotRGB(rgbs, widthPixel, interpolationType)
         print('Duration plotIPF: ', int(np.round(time.time()-startTime)), 'sec')
         if not fileName and show:
@@ -781,17 +860,17 @@ class EBSD:
         return fig
 
 
-    def addUnitCellOverlay(self, ax, x, y, scale=1., colorCube='black'):
+    def addUnitCellOverlay(self, ax: Any, x: float, y: float, scale: float = 1., colorCube: str = 'black') -> int:
         """Draw the nearest orientation's unit cell onto an existing IPF axis.
 
         This is the composable counterpart to :meth:`addSymbol`. It is useful
         for applications which manage the figure themselves, such as the GUI.
         """
-        def plotLine(start, delta, color='k', lw=1):
+        def plotLine(start: np.ndarray, delta: np.ndarray, color: str = 'k', lw: float = 1) -> None:
             ax.plot([start[0]]+[start[0]+delta[0]],
                     [start[1]]+[start[1]+delta[1]], color=color, lw=lw)
 
-        iClose = np.argmin((self.x-x)**2 + (self.y-y)**2)
+        iClose = int(self._nearestIndex(x, y))
         iQuaternion = self.quaternions[iClose]
         for sym in self.sym:
             if not sym.lattice:
@@ -816,10 +895,10 @@ class EBSD:
                     else:
                         plotLine(start+location, mid-start, color=colorCube, lw=0.2)
                         plotLine(mid+location, end-mid, color=colorCube, lw=2)
-        return iClose
+        return int(iClose)
 
 
-    def addSymbol(self, x, y, fileName='', scale=1., colorCube='black'):
+    def addSymbol(self, x: float, y: float, fileName: str = '', scale: float = 1., colorCube: str = 'black') -> None:
         """
         TODO: use version in ebsd_Orientation
         Add symbol of crystal orientation (symmetry and rotation) to IPF at given location
@@ -831,24 +910,19 @@ class EBSD:
            scale: scale of symbol
            colorCube: color of symbol
         """
-        xMax = np.max(self.x[self.vMask])
-        xMin = np.min(self.x[self.vMask])
-        yMax = np.max(self.y[self.vMask])
-        yMin = np.min(self.y[self.vMask])
-        heightPixel, widthPixel = self.image.shape[:2]
         # axes fill the figure exactly, so the rendered canvas is the image without margins
-        fig = plt.figure(figsize=(6.4, 6.4*heightPixel/widthPixel), dpi=100)
+        fig = plt.figure(figsize=(6.4, 6.4/self.ratio), dpi=100)
         ax = fig.add_axes((0, 0, 1, 1))
-        ax.imshow(self.image, extent=[xMin, xMax, yMax, yMin], origin='upper', aspect='auto')
+        ax.imshow(self.image, extent=self.imageExtent, origin='upper', aspect='auto')
         ax.axis('off')
-        iClose = np.argmin((self.x-x)**2 + (self.y-y)**2)
+        iClose = self.addUnitCellOverlay(ax, x, y, scale, colorCube)
         print('Euler angles at point:',
               np.round(asBungeEulers(self.quaternions[iClose], degrees=True), 1))
-        self.addUnitCellOverlay(ax, x, y, scale, colorCube)
-        fig.canvas.draw()
-        self.image = np.asarray(fig.canvas.buffer_rgba())[..., :3].copy()
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+        self.image = np.asarray(canvas.buffer_rgba())[..., :3].copy()
         plt.close(fig)
-        plt.imshow(self.image, extent=[xMin, xMax, yMax, yMin], origin='upper')
+        plt.imshow(self.image, extent=self.imageExtent, origin='upper')
         if not fileName:
             plt.show()
         else:
@@ -857,7 +931,8 @@ class EBSD:
         return
 
 
-    def addScaleBar(self, fileName='', site='BL', barLength=None, alpha=0.5):
+    def addScaleBar(self, fileName: str = '', site: str = 'BL', barLength: float | None = None,
+                    alpha: float = 0.5) -> Any:
         """
         Add scale-bar to image
 
@@ -869,12 +944,8 @@ class EBSD:
            alpha: transparency of scale bar background
         """
         sites = {'BL': 'lower left', 'BR': 'lower right', 'TL': 'upper left', 'TR': 'upper right'}
-        xMax = np.max(self.x[self.vMask])
-        xMin = np.min(self.x[self.vMask])
-        yMax = np.max(self.y[self.vMask])
-        yMin = np.min(self.y[self.vMask])
         fig, ax = plt.subplots()
-        ax.imshow(self.image, extent=[xMin, xMax, yMax, yMin], origin='upper')
+        ax.imshow(self.image, extent=self.imageExtent, origin='upper')
         scaleBar = self.addScaleBarOverlay(ax, barLength, sites.get(site, 'lower left'))
         scaleBar.patch.set_alpha(alpha)
         ax.axis('off')
@@ -885,7 +956,7 @@ class EBSD:
             plt.close()
         return fig
 
-    def addScaleBarOverlay(self, ax, barLength=None, site='lower left'):
+    def addScaleBarOverlay(self, ax: Any, barLength: float | None = None, site: str = 'lower left') -> Any:
         """Add a scale bar to an existing map axis.
 
         Unlike :meth:`addScaleBar`, this preserves the supplied Matplotlib
@@ -900,8 +971,11 @@ class EBSD:
         from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
         if barLength is None:
-            digits = int(math.log10(round(self.width/4.)))
-            barLength = round(max(self.width, self.height) / 6., -digits)
+            # visible area of the last image; the whole map before the first plot
+            xLo, xHi, yHi, yLo = self.imageExtent if self.image.size else (0, self.width, self.height, 0)
+            width, height = xHi-xLo, yHi-yLo
+            digits = int(math.log10(round(width/4.)))
+            barLength = round(max(width, height) / 6., -digits)
         scaleBar = AnchoredSizeBar(ax.transData, barLength,
                                   str(barLength)+' '+'\u03BC'+'m', site,
                                   pad=0.5, color='black', frameon=True,
@@ -910,9 +984,9 @@ class EBSD:
         ax.add_artist(scaleBar)
         return scaleBar
 
-    def plotPF(self, axis=[1, 0, 0], points=False, fileName='',
-               color='#1f77b4', alpha=1.0, show=True, density=256, size=2,
-               proj2D='up-left', vmin=0.0, vmax=1.0):
+    def plotPF(self, axis: Any = (1, 0, 0), points: bool = False, fileName: str = '',
+               color: str = '#1f77b4', alpha: float = 1.0, show: bool = True, density: int = 256, size: int = 2,
+               proj2D: str = 'up-left', vmin: float = 0.0, vmax: float = 1.0) -> Any:
         """
         plot pole figure
 
@@ -943,7 +1017,7 @@ class EBSD:
             axis = np.array(axis, dtype=float)
             axis /= np.linalg.norm(axis)
             mask = np.logical_and(self.mask, self.vMask)
-            x, y = None, None
+            xs, ys = [], []
             for q in oHelp.symmetry.equivalentQuaternions(oHelp.quaternion):
                 conjAxis = q.apply(axis)
                 direction = self.quaternions.apply(conjAxis)
@@ -952,11 +1026,9 @@ class EBSD:
                 direction = direction[direction[:, 2] > 0]
                 direction[:, 0] /= direction[:, 2]+1.
                 direction[:, 1] /= direction[:, 2]+1.
-                if x is None:
-                    x, y = direction[:, 0], direction[:, 1]
-                else:
-                    x, y = np.hstack((x, direction[:, 0])), np.hstack(
-                        (y, direction[:, 1]))
+                xs.append(direction[:, 0])
+                ys.append(direction[:, 1])
+        x, y = np.concatenate(xs), np.concatenate(ys)
         if points:
             if proj2D == 'down-right':
                 ax.plot(-x, y, '.', color=maxColor,
@@ -995,15 +1067,15 @@ class EBSD:
             img[img < vmin] = np.nan
             ax.imshow(img, cmap=cmap, alpha=alpha,
                       vmin=0.0, vmax=vmax, origin='lower',
-                      extent=[-1, 1, -1, 1])
+                      extent=(-1, 1, -1, 1))
             ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
                     np.sin(np.linspace(0, 2*np.pi, 100)), 'k-', lw=2)
             ax.plot([0, 0], [-1, 1], 'k--', lw=1)
             ax.plot([-1, 1], [0, 0], 'k--', lw=1)
             # plt.colorbar()
         ax.set_aspect('equal', adjustable='box')
-        ax.set_xlim([-1, 1])
-        ax.set_ylim([-1, 1])
+        ax.set_xlim((-1, 1))
+        ax.set_ylim((-1, 1))
         ax.set_xticks([])
         ax.set_yticks([])
         ax.axis('off')

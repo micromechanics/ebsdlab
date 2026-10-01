@@ -4,6 +4,7 @@
 # Copyright:
 #   Original version was part of DAMASK <damask.mpie.de> (Martin Diehl, Philip Eisenlohr, Franz Roters)
 #
+from typing import Any
 import numpy as np
 from scipy.spatial.transform import Rotation
 from ._rotation import asBungeEulers
@@ -19,13 +20,13 @@ class Orientation:
     # @{
 
     def __init__(self,
-                 quaternion=None,
-                 matrix=None,
-                 eulers=None,
+                 quaternion: Rotation | None   = None,
+                 matrix:     np.ndarray | None = None,
+                 eulers:     np.ndarray | None = None,
                  # put any integer to have a fixed seed or True for real random
-                 random=False,
-                 symmetry='',
-                 ):
+                 random:     bool | int        = False,
+                 symmetry:   str               = '',
+                 ) -> None:
         # produce random orientation
         if random:
             if isinstance(random, bool):
@@ -48,10 +49,10 @@ class Orientation:
         self.eps = 1e-6
         return
 
-    def __copy__(self):
+    def __copy__(self) -> 'Orientation':
         return self.__class__(quaternion=self.quaternion, symmetry=self.symmetry.lattice)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         matrix = '\n'.join('\t'.join(map(str, self.asMatrix()[i, :])) for i in range(3))
         eulers = '\t'.join(map(str, self.asEulers('bunge', degrees=True)))
         return (f'Symmetry: {self.symmetry}\n'
@@ -60,38 +61,38 @@ class Orientation:
                 f'Bunge Eulers / deg: {eulers}')
 
     def asEulers(self,
-                 notation='bunge',
-                 degrees=False,
-                 standardRange=False):
+                 notation: str = 'bunge',
+                 degrees: bool = False,
+                 standardRange: bool = False) -> np.ndarray:
         """Return this orientation's Euler angles in the requested convention."""
         if notation.lower() not in ('bunge', 'zxz'):
             raise ValueError("Only the Bunge/intrinsic ZXZ convention is supported")
         return asBungeEulers(self.quaternion, degrees, standardRange)
     eulers = property(asEulers)
 
-    def asMatrix(self):
+    def asMatrix(self) -> np.ndarray:
         """Return this orientation as a 3-by-3 rotation matrix."""
         return self.quaternion.as_matrix()
     matrix = property(asMatrix)
 
-    def inFZ(self):
+    def inFZ(self) -> bool:
         """Check whether given Rodrigues vector falls into fundamental zone of own symmetry.
         """
         return self.symmetry.inFZ(self.quaternion)
     infz = property(inFZ)
 
-    def equivalentQuaternions(self, who=None):
+    def equivalentQuaternions(self, who: Any = None) -> list[Rotation]:
         """Return symmetry-equivalent quaternions, optionally selected by index."""
         return self.symmetry.equivalentQuaternions(self.quaternion, who)
 
-    def equivalentOrientations(self, who=None):
+    def equivalentOrientations(self, who: Any = None) -> list['Orientation']:
         """Return symmetry-equivalent orientations, optionally selected by index."""
         return [
             Orientation(quaternion=q, symmetry=self.symmetry.lattice)
             for q in self.equivalentQuaternions(who)
         ]
 
-    def reduced(self):
+    def reduced(self) -> 'Orientation':
         '''
         Transform orientation to fall into fundamental zone according to symmetry
         '''
@@ -105,7 +106,7 @@ class Orientation:
     # @name MATERIAL SPECIFIC ROUTINES
     # @{
 
-    def disorientation(self, other, sst=True):
+    def disorientation(self, other: 'Orientation', sst: bool = True) -> tuple['Orientation', int, int, bool]:
         """Disorientation between myself and given other orientation.
 
         Rotation axis falls into SST if SST == True.
@@ -143,7 +144,7 @@ class Orientation:
                 # disorientation, own sym, other sym, self-->other: True, self<--other: False
                 i, j, k == 1)
 
-    def inversePole(self, axis, proper=False, sst=True):
+    def inversePole(self, axis: Any, proper: bool = False, sst: bool = True) -> tuple[np.ndarray, int]:
         """Rotate an axis into the standard stereographic triangle using symmetry.
 
         Args:
@@ -167,7 +168,7 @@ class Orientation:
             pole = self.quaternion.inv().apply(axis)
         return (pole, i if sst else 0)
 
-    def ipfColor(self, axis, proper=False):
+    def ipfColor(self, axis: Any, proper: bool = False) -> np.ndarray:
         """color of inverse pole figure for given axis
 
         Args:
@@ -189,8 +190,8 @@ class Orientation:
 
     @classmethod
     def average(cls,
-                orientations,
-                multiplicity=None):
+                orientations: list['Orientation'],
+                multiplicity: Any = None) -> 'Orientation':
         """Return the average orientation
 
         ref: F. Landis Markley, Yang Cheng, John Lucas Crassidis, and Yaakov Oshman,
@@ -231,7 +232,7 @@ class Orientation:
     ##
     # @name PLOTTING, PRINTING
     # @{
-    def project(self, x, y, z):
+    def project(self, x: Any, y: Any, z: Any) -> tuple[np.ndarray, ...]:
         """
 
         down-right: y, -x
@@ -244,11 +245,11 @@ class Orientation:
         projections = {'down-right': (y, -x), 'up-left': (-y, x), 'right-up': (x, y),
                        'left-down': (-x, -y), '3D': (x, y, z)}
         if self.plot2D not in projections:
-            print('Error: plot2D not well defined: plotLine')
-            return None
+            raise ValueError(f'plot2D must be one of {", ".join(projections)}, not {self.plot2D!r}')
         return projections[self.plot2D]
 
-    def plotLine(self, ax, start, delta, color='k', lw=1, ls='solid', markerSize=None):
+    def plotLine(self, ax: Any, start: Any, delta: Any, color: str = 'k', lw: float = 1, ls: str = 'solid',
+                 markerSize: float | None = None) -> None:
         """
         Plot one line using given projection
 
@@ -281,7 +282,8 @@ class Orientation:
                     ls=ls, markersize=markerSize)
         return
 
-    def plotUnit(self, ax, xlabel, ylabel, zlabel,  x=0, y=0, z=0,   s=1):  # unit axis
+    def plotUnit(self, ax: Any, xlabel: str, ylabel: str, zlabel: str,
+                 x: float = 0, y: float = 0, z: float = 0, s: float = 1) -> None:  # unit axis
         """
         Coordinate systems: see plotLine
 
@@ -309,7 +311,8 @@ class Orientation:
             ax.text(*(self.project(x+0.1, y, z+s)+(zlabel,)))
         return
 
-    def plot(self, poles=None, unitCell=True, cos=True, annotate=False, plot2D='', scale=2, fileName=''):
+    def plot(self, poles: Any = None, unitCell: bool = True, cos: bool = True, annotate: bool = False,
+             plot2D: str = '', scale: float = 2, fileName: str = '') -> None:
         """Plot rotated unit-cell in 3D, and possibly the pole-figure and specific poles
 
         Projection onto 2D: cooradinate systems are given as xDirection-yDirection (z follows)
@@ -326,12 +329,12 @@ class Orientation:
            fileName: fileName for image output (if given, image not shown)
         """
         import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
+        ax: Any
         if plot2D:
             self.plot2D = plot2D
         if self.plot2D == '3D':
             fig = plt.figure()
-            ax = fig.gca(projection='3d')
+            ax = fig.add_subplot(projection='3d')
             # ax.view_init(90,0)
         else:
             fig, ax = plt.subplots()
@@ -404,8 +407,8 @@ class Orientation:
         else:
             ax.set_aspect('equal', adjustable='box')
         ax.axis('off')
-        ax.set_xlim([-scale*1.1, scale*1.1])
-        ax.set_ylim([-scale*1.1, scale*1.1])
+        ax.set_xlim((-scale*1.1, scale*1.1))
+        ax.set_ylim((-scale*1.1, scale*1.1))
         if self.plot2D == '3D':
             ax.set_zlabel('')
             ax.set_zticks([])
@@ -415,7 +418,7 @@ class Orientation:
             plt.show()
         return
 
-    def toScreen(self, equivalent=True):
+    def toScreen(self, equivalent: bool = True) -> None:
         """
         print Euler angles and HKL /UVW
 

@@ -8,7 +8,7 @@ Features
 
 - File formats accepted .ang | .osc | .crc | .txt
 - can write .ang for FCC. Others could be added
-- fast plotting interaction using virtual mask (only used for plotting)
+- fast plotting: maps are drawn directly from the scan grid; virtual mask (only used for plotting)
    - increases speed in intermediate test plots
    - can be removed just before final plotting
 - verified with the OIM software and mTex
@@ -38,4 +38,5 @@ Table of Contents
    howto/index
    orientation
    verification
+   comparisonOrix
    api

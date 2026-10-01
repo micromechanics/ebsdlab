@@ -19,6 +19,14 @@
 ## Conventions
 
 - Do not regenerate baseline images unless the visual change is intentional and reviewed.
+- Baseline review, when a change alters images:
+  1. `rm -rf tests/baseline_review && pytest --mpl --mpl-baseline-path=tests/baseline --mpl-results-path=tests/baseline_review --mpl-generate-summary=html`
+     writes `baseline.png`, `result.png` and `result-failed-diff.png` per failing test, plus `fig_comparison.html`.
+  2. Add a side-by-side `tests/baseline_review/side_by_side.png` (matplotlib, baseline left, result right, one row
+     per changed test); for new behaviour not covered by a test, add panels showing it, with timings if speed changed.
+  3. Look at the images yourself, then report what differs and why; do not commit `tests/baseline_review/`.
+  4. Only after approval copy each `result.png` to `tests/baseline/<test>.png` and to `docs/source/_static/` where a
+     copy exists there; rerun the tests.
 - Prefer NumPy/SciPy APIs over ad hoc numerical code when they make behavior clearer.
 - Keep imported OSC Euler angles and scalar data as `float16` unless a task explicitly requires higher precision. This is a deliberate memory/performance trade-off for large maps: EBSD indexing angular accuracy is typically no better than about 0.1°, so retaining `float32` input precision does not usually improve the physical result.
 

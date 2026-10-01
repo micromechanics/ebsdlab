@@ -120,3 +120,21 @@ def test_ebsd_pf_points():
     e = EBSD(str(dataDir/'EBSD.ang'))
     fig = e.plotPF([1, 0, 0], points=True)
     return fig
+
+
+@pytest.mark.parametrize('fileName, grid, nNeighbors', [(DATA_DIR/'EBSD.ang', 'HexGrid', 6), (None, 'SqrGrid', 4)])
+def test_grid_neighbors_are_one_step_away(tmp_path, fileName, grid, nNeighbors):
+    """Coordinates come from the grid; every valid neighbor is one step away."""
+    if fileName is None:
+        fileName = tmp_path/'square.ang'
+        fileName.write_text(ANG_DATA.replace('62', '43', 1))
+    ebsd = EBSD(fileName)
+    assert ebsd.grid == grid
+    neighbors = ebsd.neighbors()
+    assert neighbors.shape == (ebsd.nPoints, nNeighbors)
+    x, y = ebsd.xy()
+    point, valid = np.nonzero(neighbors >= 0)
+    distance = np.hypot(x[neighbors[point, valid]]-x[point], y[neighbors[point, valid]]-y[point])
+    np.testing.assert_allclose(distance, ebsd.stepSizeX, rtol=1e-3)
+    if grid == 'HexGrid':  # interior points have all six neighbors
+        assert np.sum(np.all(neighbors >= 0, axis=1)) > 0.9*ebsd.nPoints

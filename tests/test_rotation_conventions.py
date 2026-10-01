@@ -137,7 +137,6 @@ def test_documented_cubic_orientation_average():
 def test_kam_is_mean_symmetry_reduced_misorientation():
     """A point surrounded by six ten-degree neighbors has a KAM of ten."""
     ebsd = EBSD.__new__(EBSD)
-    ebsd.x = np.arange(7, dtype=float)
     ebsd.ci = np.ones(7)
     ebsd.sym = [Symmetry("cubic")]
 

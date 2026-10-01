@@ -37,7 +37,7 @@ Let's looking at inverse pole figure (IPF) in normal direction (ND) and pole-fig
 - Plot confidence index (CI). Mask out all points with a CI less than 0.1. Initially all points are present in the mask, i.e. they are shown. By masking out points, these are removed from the mask.
 - Plot inverse pole figure in normal direction
 - Play with different options (e.g. 1024 pixel to see speed of plotting)
-- setVMask: for fast plotting
+- setVMask: for fast plotting (preview: maps show every k-th row and column, pole figures every k-th point)
 - Pole figure (PF) in the [1,0,0] direction. The OIM software has the top left corner as coordinate origin
 
 .. jupyter-execute::
@@ -99,7 +99,7 @@ Data that exists and can be used for plotting in plot
 - OIM software:
 
   - e.phi1, e.phi, e.phi2 : Euler angles saved as quaternions
-  - e.x, e.y : x,y coordinates
+  - e.x, e.y : x,y coordinates, computed from the grid (e.grid, e.nRows, e.nColsOdd, e.nColsEven, e.stepSizeX, e.stepSizeY); e.xy(idx) for selected points
   - e.iq, e.ci, e.phaseID : Image Quality, confidence index (bad=0 ... good=1), phase id
   - e.semSignal : SEM signal
   - e.fit :
@@ -166,7 +166,7 @@ Compute the mean grain orientation for all points in the map.
    from ebsdlab.ebsd import EBSD
    Orients = []
    e = EBSD("../tests/DataFiles/EBSD.ang")
-   for i in range(len(e.x)):
+   for i in range(e.nPoints):
        Orients.append(Orientation(quaternion=e.quaternions[i], symmetry="cubic"))
    avg = Orientation.average(Orients)
    print("Average orientation", np.round(avg.asEulers(degrees=True, standardRange=True), 0))
