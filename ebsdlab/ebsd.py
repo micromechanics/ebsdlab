@@ -15,11 +15,15 @@ from matplotlib import colors
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from scipy.interpolate import griddata
 from scipy.spatial.transform import Rotation
-from ._rotation import asBungeEulers, asRodrigues
+from ._rotation import asBungeEulers
 from .orientation import Orientation
 from .symmetry import Symmetry
 
 SUPPORTED_SUFFIXES = {'.ang', '.osc', '.txt', '.crc'}
+TSL_SYMMETRIES = {43: 'cubic', 62: 'hexagonal', 42: 'tetragonal', 22: 'orthorhombic', 32: 'trigonal',
+                  2: 'monoclinic', 1: 'triclinic', 'm-3m': 'cubic'}
+OXFORD_LAUE_GROUPS = {11: 'cubic', 9: 'hexagonal', 5: 'tetragonal', 3: 'orthorhombic', 7: 'trigonal',
+                      2: 'monoclinic', 1: 'triclinic'}
 
 
 class EBSD:
@@ -38,7 +42,10 @@ class EBSD:
         Args:
            fileName: file name in the present directory
            symmetry: optional crystal symmetry name, e.g. "cubic".
-               When supplied, it overrides symmetry read from the file.
+               When supplied, it overrides the symmetries of all phases read from the file.
+
+        Phases: phaseID 0 means not identified; phases are numbered from 1. self.sym[k] is the
+        symmetry of phase k, self.sym[0] is an empty Symmetry().
         """
         # initialize
         self.meta: dict[str, Any] = {}
@@ -65,7 +72,7 @@ class EBSD:
         self.xOffset = 0.0  # x-shift of even rows: stepSizeX/2 for hexagonal grids
         startTime = time.time()
         self.scanUnit = 'um'
-        self.sym: list[Symmetry] = []
+        self.sym: list[Symmetry] = []  # loaders add phase 1, 2, ...
 
         # read input file header and parse it
         self.fileName = str(fileName)
@@ -87,7 +94,9 @@ class EBSD:
                 + ', '.join(sorted(SUPPORTED_SUFFIXES)) + '.')
 
         if symmetry:
-            self.sym = [Symmetry(symmetry)]
+            self.sym = [Symmetry(symmetry)] * max(1, int(self.phaseID.max()))
+        # phases without known symmetry are not identified
+        self.sym = [Symmetry()] + self.sym + [Symmetry()] * (int(self.phaseID.max()) - len(self.sym))
 
         print('   Read file with step size:', self.stepSizeX, self.stepSizeY, self.grid)
         print('   Optimal image pixel size:', int(self.width/self.stepSizeX))
@@ -187,21 +196,22 @@ class EBSD:
             shown = np.unique(self._image(np.arange(self.nPoints), widthPixel)[0])
         else:
             shown = np.flatnonzero(self.vMask)
-        flags = np.zeros(len(shown), dtype=bool)
-        rgbsShown = np.zeros((3, len(shown)), dtype=float)
-        for sym in self.sym:
-            if not sym.lattice:
+        rgbs = np.zeros((3, self.nPoints), dtype=float)
+        for phase, sym in enumerate(self.sym):
+            points = shown[self.phaseID[shown] == phase]
+            if not sym.lattice or not len(points):
                 continue
-            equivQuaternions = sym.equivalentQuaternions(self.quaternions[shown])
+            flags = np.zeros(len(points), dtype=bool)
+            rgbsPhase = np.zeros((3, len(points)), dtype=float)
+            equivQuaternions = sym.equivalentQuaternions(self.quaternions[points])
             for equivQuaternion in equivQuaternions:
                 pole = equivQuaternion.inv().apply(axis)
                 remainingFlags, remainingRgbs = sym.inSST(
                     pole[~flags].T, color=True, proper=False)
                 if len(remainingRgbs.shape) == 2:
-                    rgbsShown[:, ~flags] = remainingRgbs
+                    rgbsPhase[:, ~flags] = remainingRgbs
                     flags[~flags] = remainingFlags
-        rgbs = np.zeros((3, self.nPoints), dtype=float)
-        rgbs[:, shown] = rgbsShown
+            rgbs[:, points] = rgbsPhase
         fig = self.plotRGB(rgbs, widthPixel, interpolationType)
         print('Duration plotIPF: ', int(np.round(time.time()-startTime)), 'sec')
         if not fileName and show:
@@ -288,9 +298,8 @@ class EBSD:
         """
         iClose = int(self._nearestIndex(x, y))
         iQuaternion = self.quaternions[iClose]
-        for sym in self.sym:
-            if not sym.lattice:
-                continue
+        sym = self.sym[self.phaseID[iClose]]
+        if sym.lattice:
             for line in sym.unitCell():
                 start = iQuaternion.apply(np.array(line[:3], dtype=float)*scale)
                 end = iQuaternion.apply(np.array(line[3:], dtype=float)*scale)
@@ -404,13 +413,13 @@ class EBSD:
         startTime = time.time()
         fig, ax = plt.subplots()
         maxColor = tuple(np.array(colors.hex2color(color))*0.5)
-        for sym in self.sym:
+        for phase, sym in enumerate(self.sym):
             if not sym.lattice:
                 continue
             oHelp = Orientation(eulers=np.array([0., 0., 0.]), symmetry=sym.lattice)
             axis = np.array(axis, dtype=float)
             axis /= np.linalg.norm(axis)
-            mask = np.logical_and(self.mask, self.vMask)
+            mask = self.mask & self.vMask & (self.phaseID == phase)
             xs, ys = [], []
             for q in oHelp.symmetry.equivalentQuaternions(oHelp.quaternion):
                 conjAxis = q.apply(axis)
@@ -502,6 +511,7 @@ class EBSD:
                 'WorkingDistance', 'SEMVoltage', 'GRID:', 'Symmetry']
         fileHandle = open(self.fileName)
         keyValues: list[Any] = [''] * len(keys)  # actual values
+        symmetries = []
         for line in fileHandle:
             if line[0:10] == '# OPERATOR':
                 break
@@ -517,10 +527,11 @@ class EBSD:
                         except ValueError:
                             pass
                     keyValues[index] = value
+                    if key == 'Symmetry':
+                        symmetries.append(value)
                     break
         self.meta = dict(list(zip(keys, keyValues)))
-        if self.meta['Symmetry'] == 43 or self.meta['Symmetry'] == 'm-3m':
-            self.sym.append(Symmetry('cubic'))
+        self.sym = [Symmetry(TSL_SYMMETRIES.get(i, '')) for i in symmetries]
         # read data: print "Reading file, this can take a bit..."
         data = np.loadtxt(fileHandle)
         self.phi1 = data[:, 0].astype(float)
@@ -529,6 +540,7 @@ class EBSD:
         self.iq = data[:, 5].astype(float)
         self.ci = data[:, 6].astype(float)
         self.phaseID = data[:, 7].astype(np.uint8)
+        self.phaseID += not self.phaseID.any()  # single-phase EDAX files use 0
         self.semSignal = data[:, 8].astype(np.uint8)
         self.fit = data[:, 9].astype(float)
         self.width  = max(data[:, 3])
@@ -633,8 +645,8 @@ class EBSD:
             if 'Fit' in foundKeys:
                 self.fit = data[:, foundKeys['Fit'] - 1].astype(np.float16)
             if 'Phase' in foundKeys:
-                self.phaseID = data[:,
-                                    foundKeys['Phase'] - 1].astype(np.float16)
+                self.phaseID = data[:,foundKeys['Phase'] - 1].astype(np.uint8)
+                self.phaseID += not self.phaseID.any()  # single-phase EDAX files use 0
             if 'sem' in foundKeys:
                 self.semSignal = data[:,
                                       foundKeys['sem'] - 1].astype(np.float16)
@@ -696,7 +708,8 @@ class EBSD:
         self.phi2 = data[:, 2].astype(np.float16)
         self.iq = data[:, 5].astype(np.float16)
         self.ci = data[:, 6].astype(np.float16)
-        self.phaseID = data[:, 7].astype(np.float16)
+        self.phaseID = data[:, 7].astype(np.uint8)
+        self.phaseID += not self.phaseID.any()  # single-phase EDAX files use 0
         self.semSignal = data[:, 8].astype(np.float16)  # SEMSignal
         self.fit = data[:, 9].astype(np.float16)  # Fit
         self.width  = float(max(data[:, 3]))
@@ -744,12 +757,8 @@ class EBSD:
         self.width = xcells * self.stepSizeX
         self.height = ycells * self.stepSizeY
         self.ratio = self.width/self.height
-        if cprData['phase1']['lauegroup'] == 11:
-            self.sym.append(Symmetry())  # phase 0: default = not identified
-            self.sym.append(Symmetry('cubic'))  # phase 1: cubic
-        else:
-            print('ERROR: no symmetry found')
-            return
+        self.sym = [Symmetry(OXFORD_LAUE_GROUPS.get(cprData[f'phase{i}']['lauegroup'], ''))
+                    for i in range(1, int(cprData['phases']['count'])+1)]
 
         # verify that data in correct order
         allColumnNames = [
@@ -809,9 +818,8 @@ class EBSD:
         self.phi1, self.phi, self.phi2, self.ci = (data[i].astype(float) for i in ('phi1', 'phi', 'phi2', 'ci'))
         self.ri = data['ri'].astype(float) if 'ri' in (data.dtype.names or ()) else np.zeros(numDataPoints)
         self.iq, self.semSignal, self.fit = (np.zeros(numDataPoints) for _ in range(3))
-        if not len(self.sym) == np.max(self.phaseID)-np.min(self.phaseID)+1:
-            print('ERRRO in reading CRC: symmetries do not match', len(
-                self.sym), np.max(self.phaseID)-np.min(self.phaseID)+1)
+        if np.max(self.phaseID) > len(self.sym):
+            print('ERRRO in reading CRC: symmetries do not match', len(self.sym), np.max(self.phaseID))
         return
 
 
@@ -956,37 +964,20 @@ class EBSD:
            layers: number of neighboring layers used for KAM (more: slower)
         """
         startTime = time.time()
-        sym = self.sym[0]
         neighbors = self.neighbors()
         assert neighbors is not None
-        fzThreshold = math.sqrt(2.0)-1.0
-        angles = np.empty_like(neighbors, dtype=float)
-        neighborSymQ = sym.symmetryQuats()
-        symQ = neighborSymQ[0]
-        for iNeighbor in range(neighbors.shape[1]):
-            neighborQ = self.quaternions[neighbors[:, iNeighbor]]
-            misQ = self.quaternions.inv() * neighborQ
-            foundAngle = np.zeros(len(self.quaternions), dtype=bool)
-            for nSQ in neighborSymQ:
-                candidate = symQ.inv()*misQ*nSQ
-                for theQ in (candidate.inv(), candidate):
-                    theQRodrigues = abs(asRodrigues(theQ))
-                    inFZ = np.logical_and(
-                        np.logical_and(
-                            fzThreshold >= theQRodrigues[:, 0], fzThreshold >= theQRodrigues[:, 1]),
-                        np.logical_and(
-                            fzThreshold >= theQRodrigues[:, 2],
-                            1.0 >= np.sum(theQRodrigues, axis=1),
-                        )
-                    )
-                    angle = theQ.magnitude()
-                    foundAngle[inFZ] = True
-                    angles[inFZ, iNeighbor] = angle[inFZ]
-                    mask = self.ci[neighbors[:, iNeighbor]] == -1.0
-                    angles[mask, iNeighbor] = np.nan
-                if np.all(foundAngle):
-                    break  # stop looking for alternatives if filled already all
-        angles[neighbors < 0] = np.nan  # -10 would index points at the end of the map
+        angles = np.full(neighbors.shape, np.nan)
+        for phase, sym in enumerate(self.sym):
+            points = np.flatnonzero(self.phaseID == phase)
+            if not sym.lattice or not len(points):
+                continue
+            symQ = sym.symmetryQuats()
+            for iNeighbor in range(neighbors.shape[1]):
+                misQ = self.quaternions[points].inv() * self.quaternions[neighbors[points, iNeighbor]]
+                angles[points, iNeighbor] = np.min([(misQ*q).magnitude() for q in symQ], axis=0)
+        # -10 would index points at the end of the map
+        angles[(neighbors < 0) | (self.phaseID[neighbors] != self.phaseID[:, None])] = np.nan
+        angles[self.ci[neighbors] == -1.0] = np.nan
         self.kam = np.degrees(np.nanmean(angles, axis=1))
         self.kam[self.ci == -1.0] = np.nan
         print('Duration KAM evaluation: ', int(
@@ -1054,12 +1045,13 @@ class EBSD:
         fileOut.write('# khlFamilies 3 1 1 1 0.0\n')
         fileOut.write(f'#\n# GRID: {self.grid}\n#\n')
         xs, ys = self.xy()
+        phaseID = self.phaseID if self.phaseID.max() > 1 else np.zeros_like(self.phaseID)
         for i in range(self.nPoints):
             phi1, phi, phi2 = tuple(asBungeEulers(self.quaternions[i]))
             fileOut.write(
                 f' {phi1:8.5f} {phi:8.5f} {phi2:8.5f} {xs[i]:12.5f}'
                 f' {ys[i]:12.5f} {self.iq[i]:8.3f} {self.ci[i]:6.3f}'
-                f' {self.phaseID[i]:2d} {self.semSignal[i]:6d} {self.fit[i]:7.3f}\n'
+                f' {phaseID[i]:2d} {self.semSignal[i]:6d} {self.fit[i]:7.3f}\n'
             )
         fileOut.close()
         print('Duration writeANG: ', int(

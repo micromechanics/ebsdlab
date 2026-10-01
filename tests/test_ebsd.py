@@ -31,7 +31,7 @@ def test_osc_ipf_with_manually_supplied_symmetry():
     ebsd = EBSD(str(DATA_DIR/'EBSD.osc'), symmetry='cubic')
     ebsd.plotIPF(show=False)
 
-    assert repr(ebsd.sym[0]) == 'cubic'
+    assert repr(ebsd.sym[1]) == 'cubic'
     assert np.any(np.asarray(ebsd.image))
 
 
@@ -41,7 +41,7 @@ def test_ang_with_manual_non_cubic_symmetry_loads(tmp_path):
     data_file.write_text(ANG_DATA)
     ebsd = EBSD(data_file, symmetry='hexagonal')
     assert len(ebsd.x) == 4
-    assert repr(ebsd.sym[0]) == 'hexagonal'
+    assert repr(ebsd.sym[1]) == 'hexagonal'
 
 
 def test_file_extensions_are_case_insensitive_and_invalid_ones_raise(tmp_path):

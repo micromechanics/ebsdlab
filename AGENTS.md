@@ -36,6 +36,8 @@
   4. Only after approval copy each `result.png` to `tests/baseline/<test>.png` and to `docs/source/_static/` where a
      copy exists there; rerun the tests.
 - Prefer NumPy/SciPy APIs over ad hoc numerical code when they make behavior clearer.
+- `phaseID` is `uint8`: 0 = not identified (`self.sym[0]` is `Symmetry()`), phases are numbered from 1 and
+  `self.sym[k]` is the symmetry of phase `k`. Loaders convert file conventions to this; `writeANG` converts back.
 - Keep imported OSC Euler angles and scalar data as `float16` unless a task explicitly requires higher precision. This is a deliberate memory/performance trade-off for large maps: EBSD indexing angular accuracy is typically no better than about 0.1°, so retaining `float32` input precision does not usually improve the physical result.
 
 ## Issues

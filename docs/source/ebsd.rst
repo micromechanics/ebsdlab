@@ -25,7 +25,7 @@ not contain readable phase-symmetry metadata, supply it while opening the map:
    e.plotIPF()
 
 ``symmetry`` accepts a lattice name supported by ``Symmetry`` (such as
-``"cubic"``), or an existing ``Symmetry``.
+``"cubic"``), or an existing ``Symmetry``. It sets the symmetry of all phases.
 
 
 Example: Read EBSD data and plot the ND IPF
@@ -100,7 +100,7 @@ Data that exists and can be used for plotting in plot
 
   - e.phi1, e.phi, e.phi2 : Euler angles saved as quaternions
   - e.x, e.y : x,y coordinates, computed from the grid (e.grid, e.nRows, e.nColsOdd, e.nColsEven, e.stepSizeX, e.stepSizeY); e.xy(idx) for selected points
-  - e.iq, e.ci, e.phaseID : Image Quality, confidence index (bad=0 ... good=1), phase id
+  - e.iq, e.ci, e.phaseID : Image Quality, confidence index (bad=0 ... good=1), phase id (0: not identified, phases from 1; symmetry of phase k: e.sym[k])
   - e.semSignal : SEM signal
   - e.fit :
 

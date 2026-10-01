@@ -138,7 +138,8 @@ def test_kam_is_mean_symmetry_reduced_misorientation():
     """A point surrounded by six ten-degree neighbors has a KAM of ten."""
     ebsd = EBSD.__new__(EBSD)
     ebsd.ci = np.ones(7)
-    ebsd.sym = [Symmetry("cubic")]
+    ebsd.sym = [Symmetry(), Symmetry("cubic")]
+    ebsd.phaseID = np.ones(7, dtype=np.uint8)
 
     eulers = np.zeros((3, 7))
     eulers[1, 1:] = np.deg2rad(10.0)

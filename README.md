@@ -32,6 +32,14 @@ necessary for phase identification, pattern simulation, or distinguishing
 closely related crystal structures, but not for orientation maps, IPF colors,
 misorientation, KAM, or pole-figure analysis of a known phase.
 
+## Phases
+Every point has a `phaseID` (`uint8`):
+- `0`: not identified; `emap.sym[0]` is an empty `Symmetry()`
+- `1, 2, ...`: phases; `emap.sym[k]` is the symmetry of phase `k`
+
+IPF maps, pole figures, unit-cell overlays and KAM use the symmetry of each point's phase; KAM ignores
+neighbors of another phase.
+
 ## Example
 EBSD-Inverse Pole Figure (IPF) of polycrystalline Copper with corresponding Pole Figure
 <table>
@@ -142,8 +150,8 @@ Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebs
 - Much polishing, incl GUI, Code
   - Make fast preview clearer
   - demo code incl. comments and savefig
-- Afterwards mypy
-- Compare to orix, what is better/worse
+
+- Implement:grain reconstruction or ODF analysis at the level of mTex
 - Yapf use for formatting with 110
 - Neighbour and KAM calculations currently require scan rows ordered by x with
   a decreasing-x reset between rows. Single-row and differently ordered grids cannot be supported. -> Exception
