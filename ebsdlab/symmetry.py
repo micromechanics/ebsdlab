@@ -166,84 +166,95 @@ GROUPS: dict[str, dict[str, Any]] = {
 LATTICE_ALIASES = {'rhombohedral': 'trigonal'}
 
 
-def _orthogonalCell(a: float, b: float, c: float) -> np.ndarray:
-    """Return the twelve centered edges of an orthogonal unit cell."""
-    vertices = np.array([
-        [-a, -b, -c], [-a, -b, c], [-a, b, -c], [-a, b, c],
-        [a, -b, -c], [a, -b, c], [a, b, -c], [a, b, c],
-    ]) / 2.0
-    connections = (
-        (0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
-        (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7),
-    )
-    return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
-
-
-def _hexagonalCell(a: float, c: float) -> np.ndarray:
-    """Return the eighteen centered edges of a regular hexagonal prism."""
-    angles = np.arange(6) * np.pi / 3.0
-    basal = np.column_stack((a * np.cos(angles), a * np.sin(angles)))
-    lower = np.column_stack((basal, np.full(6, -c / 2.0)))
-    upper = np.column_stack((basal, np.full(6, c / 2.0)))
-    vertices = np.vstack((lower, upper))
-    connections = (
-        [(index, (index + 1) % 6) for index in range(6)]
-        + [(index + 6, (index + 1) % 6 + 6) for index in range(6)]
-        + [(index, index + 6) for index in range(6)]
-    )
-    return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
-
-
-def _parallelepipedCell(a: float, b: float, c: float,
-                         alpha: float, beta: float, gamma: float) -> np.ndarray:
-    """Return centered edges of a cell defined by lengths and angles in degrees."""
-    alpha, beta, gamma = np.deg2rad((alpha, beta, gamma))
-    cosAlpha, cosBeta, cosGamma = np.cos((alpha, beta, gamma))
-    sinGamma = np.sin(gamma)
-    cY = c * (cosAlpha - cosBeta * cosGamma) / sinGamma
-    cZSquared = c*c - (c*cosBeta)**2 - cY*cY
-    if cZSquared <= 0.0:
-        raise ValueError('lattice angles do not define a valid unit cell')
-    vectors = np.array([
-        [a, 0.0, 0.0],
-        [b * cosGamma, b * sinGamma, 0.0],
-        [c * cosBeta, cY, np.sqrt(cZSquared)],
-    ])
-    vertices = np.array([
-        (sx * vectors[0] + sy * vectors[1] + sz * vectors[2]) / 2.0
-        for sx in (-1.0, 1.0) for sy in (-1.0, 1.0) for sz in (-1.0, 1.0)
-    ])
-    connections = ((0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
-                   (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7))
-    return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
-
-
-
 class Symmetry:
     """Material symmetry identified by a human-readable lattice name."""
 
     def __init__(self, symmetry: str = '') -> None:
-        """Create a symmetry from a lattice name such as 'cubic'; '' means not identified."""
+        """Create a symmetry from a lattice name such as 'cubic'; '' means not identified.
+
+        Args:
+           symmetry: lattice name or alias such as 'rhombohedral'
+        """
         self.lattice = ''
         if symmetry:
             lattice = LATTICE_ALIASES.get(symmetry.lower(), symmetry.lower())
             if lattice not in GROUPS:
-                raise ValueError(f'Unknown symmetry {symmetry!r}. Supported: {", ".join(GROUPS)}')
+                raise ValueError(f'Unknown symmetry {symmetry!r}. Supported: {', '.join(GROUPS)}')
             self.lattice = lattice
 
-    def __copy__(self) -> 'Symmetry':
-        return self.__class__(self.lattice)
 
-    def __repr__(self) -> str:
-        return str(self.lattice)
+    def standardTriangle(self, fileName: str = '', show: bool = True, stepSize: float = 0.1) -> Any:
+        """Plot the colored cubic standard stereographic triangle.
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Symmetry):
-            return NotImplemented
-        return self.lattice == other.lattice
+        Args:
+           fileName: if given, save to file
+           show: show the figure
+           stepSize: spacing of the colored points
+
+        Returns:
+           matplotlib figure; None if the lattice is not cubic
+        """
+        if self.lattice != 'cubic':
+            print('ERROR: only implemented for cubic lattice')
+            return None
+        # create border
+        borderPoints = [[0.0, 0.0]]
+        xTemp = []
+        yTemp = []
+        for a in range(16):
+            borderPoints.append([
+                math.cos(a/180.0*math.pi)*math.sqrt(2.0) - 1,
+                math.sin(a/180.0*math.pi)*math.sqrt(2.0),
+            ])
+            xTemp.append(math.cos(a/180.0*math.pi)*math.sqrt(2.0)-1)
+            yTemp.append(math.sin(a/180.0*math.pi)*math.sqrt(2))
+        borderPoints.append([0.0, 0.0])
+        border = np.array(borderPoints)
+        func = interp1d(yTemp, xTemp)  # function yTemp=func(xTemp)
+        # create colored background
+        xyPoints = []
+        for iY in np.arange(0, 0.366025403784, stepSize):
+            for iX in np.arange(iY, 0.41421, stepSize):
+                if func(iY) <= iX:
+                    continue
+                xyPoints.append([iX, iY])
+        xy = np.array(xyPoints)
+
+        hkl = self.xyToHKL(xy.T)
+        assert hkl is not None
+        _, rgb = self.inSST(hkl, color=True, proper=False)
+        colors = []
+        for i in range(rgb.shape[1]):
+            values = (rgb[:, i]*255).astype(int)
+            string = f'#{values[0]:02x}{values[1]:02x}{values[2]:02x}'
+            colors.append(string)
+        # plotting: background, border, labels
+        fig, ax = plt.subplots()
+        ax.scatter(xy[:, 0], xy[:, 1], c=colors, s=15000. *
+                   stepSize, linewidths=0)  # , alpha=0.05)
+        ax.plot(border[:, 0], border[:, 1], '-k', linewidth=3)  # , alpha=0.5)
+        plt.rcParams['font.size'] = 18.
+        ax.text(0, 0, '[100]', horizontalalignment='right')  # , zorder=40
+        ax.text(0.42, 0, '[110]')
+        ax.text(0.37, 0.37, '[111]')
+        ax.axis('off')
+        ax.axis('equal')
+        if fileName:
+            plt.savefig(fileName)
+        if show:
+            plt.show()
+        return fig
+
 
     def symmetryQuats(self, who: Any = None) -> Rotation:
-        """Return the proper symmetry rotations, with identity at index zero."""
+        """Return the proper symmetry rotations, with identity at index zero.
+
+        Args:
+           who: indices of the operations to return [default: all]
+
+        Returns:
+           symmetry rotations
+        """
         # Generate all symmetry-equivalent rotation operations
         config = GROUPS.get(self.lattice)
         operations = (Rotation.create_group(
@@ -260,6 +271,7 @@ class Symmetry:
             operations = operations[np.atleast_1d(who)]
         return operations
 
+
     def unitCell(self, *, a: float = 1.0, b: float | None = None,
                  c: float | None = None, alpha: float | None = None,
                  beta: float | None = None, gamma: float | None = None) -> np.ndarray | list[list[None]]:
@@ -267,6 +279,17 @@ class Symmetry:
 
         The defaults are illustrative proportions for plotting. Supply positive
         lattice constants for a material-specific cell.
+
+        Args:
+           a: lattice constant a
+           b: lattice constant b [default: from the lattice's default ratio]
+           c: lattice constant c [default: from the lattice's default ratio]
+           alpha: lattice angle in degrees [default: lattice default]
+           beta: lattice angle in degrees [default: lattice default]
+           gamma: lattice angle in degrees [default: lattice default]
+
+        Returns:
+           edges, one row per edge; [[None]] for an unknown lattice
         """
         if self.lattice not in GROUPS:
             print('Unit cell not implemented')
@@ -304,12 +327,27 @@ class Symmetry:
 
 
     def equivalentQuaternions(self, quaternion: Rotation, who: Any = None) -> list[Rotation]:
-        """Return rotations equivalent to ``quaternion`` under this symmetry."""
+        """Return rotations equivalent to ``quaternion`` under this symmetry.
+
+        Args:
+           quaternion: rotation
+           who: indices of the symmetry operations [default: all]
+
+        Returns:
+           equivalent rotations
+        """
         return [quaternion*q for q in self.symmetryQuats(who)]
 
 
     def inFZ(self, rotation: Rotation) -> bool:
-        """Return whether a rotation lies in the fundamental zone (FZ)"""
+        """Return whether a rotation lies in the fundamental zone (FZ)
+
+        Args:
+           rotation: rotation to test
+
+        Returns:
+           True if inside the fundamental zone
+        """
         rawRodrigues = np.asarray(asRodrigues(rotation), dtype=float)
         # fundamental zone in Rodrigues space is point symmetric around origin
         rodrigues = abs(rawRodrigues)
@@ -350,6 +388,12 @@ class Symmetry:
         """Return whether a misorientation lies in the standard triangle.
 
         The criteria follow Heinz and Neumann, Acta Cryst. A47 (1991), 780-789.
+
+        Args:
+           rotation: misorientation to test
+
+        Returns:
+           True if inside the standard triangle
         """
         rodrigues = asRodrigues(rotation)
         if self.lattice == 'cubic':
@@ -383,6 +427,14 @@ class Symmetry:
 
         ``proper`` also considers the neighboring proper triangle. With
         ``color=True``, return the membership flags and IPF colors as RGB values.
+
+        Args:
+           vector: one vector (3,) or several vectors (3, n)
+           proper: also consider the neighboring proper triangle
+           color: also return IPF colors
+
+        Returns:
+           membership flag(s); with color: (flags, RGB colors of shape (3,) or (3, n))
         """
         config = GROUPS.get(self.lattice)
         basis = config['sst_bases'] if config is not None else None
@@ -437,7 +489,14 @@ class Symmetry:
 
 
     def xyToHKL(self, inPlane: Any) -> np.ndarray | None:
-        """Convert cubic stereographic-plane coordinates to HKL vectors."""
+        """Convert cubic stereographic-plane coordinates to HKL vectors.
+
+        Args:
+           inPlane: coordinates (2,) or (2, n) in the stereographic plane
+
+        Returns:
+           HKL vectors (3,) or (3, n); None if the lattice is not cubic
+        """
         if self.lattice != 'cubic':
             print('ERROR: only implemented for cubic lattice')
             return None
@@ -454,55 +513,114 @@ class Symmetry:
         return hkl
 
 
-    def standardTriangle(self, fileName: str = '', show: bool = True, stepSize: float = 0.1) -> Any:
-        """Plot the colored cubic standard stereographic triangle."""
-        if self.lattice != 'cubic':
-            print('ERROR: only implemented for cubic lattice')
-            return None
-        # create border
-        borderPoints = [[0.0, 0.0]]
-        xTemp = []
-        yTemp = []
-        for a in range(16):
-            borderPoints.append([
-                math.cos(a/180.0*math.pi)*math.sqrt(2.0) - 1,
-                math.sin(a/180.0*math.pi)*math.sqrt(2.0),
-            ])
-            xTemp.append(math.cos(a/180.0*math.pi)*math.sqrt(2.0)-1)
-            yTemp.append(math.sin(a/180.0*math.pi)*math.sqrt(2))
-        borderPoints.append([0.0, 0.0])
-        border = np.array(borderPoints)
-        func = interp1d(yTemp, xTemp)  # function yTemp=func(xTemp)
-        # create colored background
-        xyPoints = []
-        for iY in np.arange(0, 0.366025403784, stepSize):
-            for iX in np.arange(iY, 0.41421, stepSize):
-                if func(iY) <= iX:
-                    continue
-                xyPoints.append([iX, iY])
-        xy = np.array(xyPoints)
+    def __copy__(self) -> 'Symmetry':
+        """Return a symmetry with the same lattice.
 
-        hkl = self.xyToHKL(xy.T)
-        assert hkl is not None
-        _, rgb = self.inSST(hkl, color=True, proper=False)
-        colors = []
-        for i in range(rgb.shape[1]):
-            values = (rgb[:, i]*255).astype(int)
-            string = f'#{values[0]:02x}{values[1]:02x}{values[2]:02x}'
-            colors.append(string)
-        # plotting: background, border, labels
-        fig, ax = plt.subplots()
-        ax.scatter(xy[:, 0], xy[:, 1], c=colors, s=15000. *
-                   stepSize, linewidths=0)  # , alpha=0.05)
-        ax.plot(border[:, 0], border[:, 1], '-k', linewidth=3)  # , alpha=0.5)
-        plt.rcParams['font.size'] = 18.
-        ax.text(0, 0, '[100]', horizontalalignment='right')  # , zorder=40
-        ax.text(0.42, 0, '[110]')
-        ax.text(0.37, 0.37, '[111]')
-        ax.axis('off')
-        ax.axis('equal')
-        if fileName:
-            plt.savefig(fileName)
-        if show:
-            plt.show()
-        return fig
+        Returns:
+           new symmetry
+        """
+        return self.__class__(self.lattice)
+
+
+    def __repr__(self) -> str:
+        """Return the lattice name.
+
+        Returns:
+           lattice name
+        """
+        return str(self.lattice)
+
+
+    def __eq__(self, other: object) -> bool:
+        """Compare lattices.
+
+        Args:
+           other: object to compare with
+
+        Returns:
+           True if both lattices are equal
+        """
+        if not isinstance(other, Symmetry):
+            return NotImplemented
+        return self.lattice == other.lattice
+
+
+def _orthogonalCell(a: float, b: float, c: float) -> np.ndarray:
+    """Return the twelve centered edges of an orthogonal unit cell.
+
+    Args:
+       a: lattice constant a
+       b: lattice constant b
+       c: lattice constant c
+
+    Returns:
+       edges (12, 6)
+    """
+    vertices = np.array([
+        [-a, -b, -c], [-a, -b, c], [-a, b, -c], [-a, b, c],
+        [a, -b, -c], [a, -b, c], [a, b, -c], [a, b, c],
+    ]) / 2.0
+    connections = (
+        (0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
+        (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7),
+    )
+    return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
+
+
+def _hexagonalCell(a: float, c: float) -> np.ndarray:
+    """Return the eighteen centered edges of a regular hexagonal prism.
+
+    Args:
+       a: lattice constant a
+       c: lattice constant c
+
+    Returns:
+       edges (18, 6)
+    """
+    angles = np.arange(6) * np.pi / 3.0
+    basal = np.column_stack((a * np.cos(angles), a * np.sin(angles)))
+    lower = np.column_stack((basal, np.full(6, -c / 2.0)))
+    upper = np.column_stack((basal, np.full(6, c / 2.0)))
+    vertices = np.vstack((lower, upper))
+    connections = (
+        [(index, (index + 1) % 6) for index in range(6)]
+        + [(index + 6, (index + 1) % 6 + 6) for index in range(6)]
+        + [(index, index + 6) for index in range(6)]
+    )
+    return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
+
+
+def _parallelepipedCell(a: float, b: float, c: float,
+                         alpha: float, beta: float, gamma: float) -> np.ndarray:
+    """Return centered edges of a cell defined by lengths and angles in degrees.
+
+    Args:
+       a: lattice constant a
+       b: lattice constant b
+       c: lattice constant c
+       alpha: angle between b and c in degrees
+       beta: angle between a and c in degrees
+       gamma: angle between a and b in degrees
+
+    Returns:
+       edges (12, 6)
+    """
+    alpha, beta, gamma = np.deg2rad((alpha, beta, gamma))
+    cosAlpha, cosBeta, cosGamma = np.cos((alpha, beta, gamma))
+    sinGamma = np.sin(gamma)
+    cY = c * (cosAlpha - cosBeta * cosGamma) / sinGamma
+    cZSquared = c*c - (c*cosBeta)**2 - cY*cY
+    if cZSquared <= 0.0:
+        raise ValueError('lattice angles do not define a valid unit cell')
+    vectors = np.array([
+        [a, 0.0, 0.0],
+        [b * cosGamma, b * sinGamma, 0.0],
+        [c * cosBeta, cY, np.sqrt(cZSquared)],
+    ])
+    vertices = np.array([
+        (sx * vectors[0] + sy * vectors[1] + sz * vectors[2]) / 2.0
+        for sx in (-1.0, 1.0) for sy in (-1.0, 1.0) for sz in (-1.0, 1.0)
+    ])
+    connections = ((0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
+                   (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7))
+    return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])

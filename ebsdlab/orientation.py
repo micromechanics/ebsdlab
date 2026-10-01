@@ -16,9 +16,6 @@ class Orientation:
     """
     __slots__ = ['quaternion', 'symmetry', 'plot2D', 'eps']
 
-    # @name CONVENTIONAL ROUTINES
-    # @{
-
     def __init__(self,
                  quaternion: Rotation | None   = None,
                  matrix:     np.ndarray | None = None,
@@ -27,6 +24,15 @@ class Orientation:
                  random:     bool | int        = False,
                  symmetry:   str               = '',
                  ) -> None:
+        """Create an orientation from the first given of random, eulers, matrix, quaternion; else identity.
+
+        Args:
+           quaternion: rotation
+           matrix: rotation matrix (3x3)
+           eulers: Bunge Euler angles in radians (3,)
+           random: True for a random orientation; an integer for a random orientation with this seed
+           symmetry: lattice name, e.g. "cubic"; '' means not identified
+        """
         # produce random orientation
         if random:
             if isinstance(random, bool):
@@ -49,268 +55,10 @@ class Orientation:
         self.eps = 1e-6
         return
 
-    def __copy__(self) -> 'Orientation':
-        return self.__class__(quaternion=self.quaternion, symmetry=self.symmetry.lattice)
 
-    def __repr__(self) -> str:
-        matrix = '\n'.join('\t'.join(map(str, self.asMatrix()[i, :])) for i in range(3))
-        eulers = '\t'.join(map(str, self.asEulers('bunge', degrees=True)))
-        return (f'Symmetry: {self.symmetry}\n'
-                f'Quaternion: {self.quaternion}\n'
-                f'Matrix:\n{matrix}\n'
-                f'Bunge Eulers / deg: {eulers}')
-
-    def asEulers(self,
-                 notation: str = 'bunge',
-                 degrees: bool = False,
-                 standardRange: bool = False) -> np.ndarray:
-        """Return this orientation's Euler angles in the requested convention."""
-        if notation.lower() not in ('bunge', 'zxz'):
-            raise ValueError("Only the Bunge/intrinsic ZXZ convention is supported")
-        return asBungeEulers(self.quaternion, degrees, standardRange)
-    eulers = property(asEulers)
-
-    def asMatrix(self) -> np.ndarray:
-        """Return this orientation as a 3-by-3 rotation matrix."""
-        return self.quaternion.as_matrix()
-    matrix = property(asMatrix)
-
-    def inFZ(self) -> bool:
-        """Check whether given Rodrigues vector falls into fundamental zone of own symmetry.
-        """
-        return self.symmetry.inFZ(self.quaternion)
-    infz = property(inFZ)
-
-    def equivalentQuaternions(self, who: Any = None) -> list[Rotation]:
-        """Return symmetry-equivalent quaternions, optionally selected by index."""
-        return self.symmetry.equivalentQuaternions(self.quaternion, who)
-
-    def equivalentOrientations(self, who: Any = None) -> list['Orientation']:
-        """Return symmetry-equivalent orientations, optionally selected by index."""
-        return [
-            Orientation(quaternion=q, symmetry=self.symmetry.lattice)
-            for q in self.equivalentQuaternions(who)
-        ]
-
-    def reduced(self) -> 'Orientation':
-        '''
-        Transform orientation to fall into fundamental zone according to symmetry
-        '''
-        for me in self.symmetry.equivalentQuaternions(self.quaternion):
-            if self.symmetry.inFZ(me):
-                break
-        return Orientation(quaternion=me, symmetry=self.symmetry.lattice)
-
-    # @}
-    ##
-    # @name MATERIAL SPECIFIC ROUTINES
-    # @{
-
-    def disorientation(self, other: 'Orientation', sst: bool = True) -> tuple['Orientation', int, int, bool]:
-        """Disorientation between myself and given other orientation.
-
-        Rotation axis falls into SST if SST == True.
-          (Currently requires same symmetry for both orientations.
-          Look into A. Heinz and P. Neumann 1991 for cases with differing sym.)
-
-         Args:
-          other: other orientation
-          SST: True (rotation axis falls into SST); False
-
-        Returns:
-          disorientation quaternion; indices of equivalent orientations; and
-          whether the result was conjugated
-        """
-        if self.symmetry != other.symmetry:
-            raise TypeError(
-                'disorientation between different symmetry classes not supported yet.')
-        misQ = self.quaternion.inv()*other.quaternion
-        mySymQs = self.symmetry.symmetryQuats() if sst else self.symmetry.symmetryQuats()[
-            :1]       # take all or only first sym operation
-        otherSymQs = other.symmetry.symmetryQuats()
-        for i, sA in enumerate(mySymQs):  # if not in SST: only one sA
-            for j, sB in enumerate(otherSymQs):  # changes always
-                candidate = sA.inv()*misQ*sB
-                for k, theQ in enumerate((candidate.inv(), candidate)):
-                    breaker = self.symmetry.inFZ(theQ) and (
-                        not sst or other.symmetry.inDisorientationSST(theQ))
-                    if breaker:
-                        break
-                if breaker:
-                    break
-            if breaker:
-                break
-        return (Orientation(quaternion=theQ, symmetry=self.symmetry.lattice),
-                # disorientation, own sym, other sym, self-->other: True, self<--other: False
-                i, j, k == 1)
-
-    def inversePole(self, axis: Any, proper: bool = False, sst: bool = True) -> tuple[np.ndarray, int]:
-        """Rotate an axis into the standard stereographic triangle using symmetry.
-
-        Args:
-          axis: vector in crystal orientation, e.g. [100]
-          proper: consider only vectors with z >= 0 using two neighboring SSTs;
-              this permits more positive results without changing the RGB value
-          SST: iterate through all equivalent and find the one in the SST
-
-        Returns:
-          vector of axis
-        """
-        if sst:  # Pole requested to be within SST.
-            # test all symmetric equivalent quaternions
-            for i, q in enumerate(self.symmetry.equivalentQuaternions(self.quaternion)):
-                # align crystal direction to axis
-                pole = q.inv().apply(axis)
-                if self.symmetry.inSST(pole, proper):
-                    break                                                # found SST version
-        else:
-            # align crystal direction to axis
-            pole = self.quaternion.inv().apply(axis)
-        return (pole, i if sst else 0)
-
-    def ipfColor(self, axis: Any, proper: bool = False) -> np.ndarray:
-        """color of inverse pole figure for given axis
-
-        Args:
-           axis: axis of pole figure (ND=001)
-           proper: consider vectors with z >= 0 using two neighboring SSTs;
-               this permits more positive results without changing the RGB value
-
-        Returns:
-           vector of color (rgb)
-        """
-        color = np.zeros(3, 'd')
-        for q in self.symmetry.equivalentQuaternions(self.quaternion):
-            # align crystal direction to axis
-            pole = q.inv().apply(axis)
-            inSST, color = self.symmetry.inSST(pole, color=True, proper=proper)
-            if inSST:
-                break
-        return color
-
-    @classmethod
-    def average(cls,
-                orientations: list['Orientation'],
-                multiplicity: Any = None) -> 'Orientation':
-        """Return the average orientation
-
-        ref: F. Landis Markley, Yang Cheng, John Lucas Crassidis, and Yaakov Oshman,
-          Averaging Quaternions,
-          Journal of Guidance, Control, and Dynamics, Vol. 30, No. 4 (2007), pp. 1193-1197.
-          doi: 10.2514/1.28949
-
-        Usage:
-          * a = Orientation(eulers=np.radians([10, 10, 0]), symmetry='hexagonal')
-          * b = Orientation(eulers=np.radians([20, 0, 0]),  symmetry='hexagonal')
-          * avg = Orientation.average([a,b])
-
-        Args:
-          cls: class method (void)
-          orientations: list of orientations
-          multiplicity: --
-
-        Returns:
-          average orientation (not rotation) in radians
-        """
-        if not all(isinstance(item, Orientation) for item in orientations):
-            raise TypeError('Only instances of Orientation can be averaged.')
-        count = len(orientations)
-        if multiplicity is None or len(multiplicity) == 0:
-            multiplicity = np.ones(count, dtype='i')
-        # take first as reference
-        reference = orientations[0]
-        closestRotations = []
-        for o in orientations:
-            closest = o.equivalentOrientations(reference.disorientation(o, sst=False)[2])[
-                0]             # select sym orientation with lowest misorientation
-            closestRotations.append(closest.quaternion)
-        mean = Rotation.concatenate(closestRotations).mean(weights=multiplicity)
-        return Orientation(quaternion=mean,
-                           symmetry=reference.symmetry.lattice)
-
-    # @}
     ##
     # @name PLOTTING, PRINTING
     # @{
-    def project(self, x: Any, y: Any, z: Any) -> tuple[np.ndarray, ...]:
-        """
-
-        down-right: y, -x
-        up-left   : -y, x
-        right-up   : x,y
-        left-down: -x,-y
-        3D        : x,y,z
-        """
-        x, y, z = np.asarray(x), np.asarray(y), np.asarray(z)
-        projections = {'down-right': (y, -x), 'up-left': (-y, x), 'right-up': (x, y),
-                       'left-down': (-x, -y), '3D': (x, y, z)}
-        if self.plot2D not in projections:
-            raise ValueError(f'plot2D must be one of {", ".join(projections)}, not {self.plot2D!r}')
-        return projections[self.plot2D]
-
-    def plotLine(self, ax: Any, start: Any, delta: Any, color: str = 'k', lw: float = 1, ls: str = 'solid',
-                 markerSize: float | None = None) -> None:
-        """
-        Plot one line using given projection
-
-        Args:
-           ax: axis to plot into
-           start: start coordinate
-           delta: delta cooradinate (end-start)
-           color: color
-           lw: line width
-           ls: line style "solid",'dashed'
-           markerSize: size of marker (only used for non-lines: delta>0)
-        """
-        if np.linalg.norm(delta) < self.eps:
-            marker = 'o'
-            if markerSize is None:
-                markerSize = 7
-        else:
-            marker = None
-            markerSize = 0
-        if self.plot2D == '3D':
-            ax.plot([start[0]]+[start[0]+delta[0]],
-                    [start[1]]+[start[1]+delta[1]],
-                    [start[2]]+[start[2]+delta[2]],
-                    color=color, lw=lw, marker=marker, ls=ls, markersize=markerSize)
-        else:
-            x, y = self.project([start[0]]+[start[0]+delta[0]],
-                                [start[1]]+[start[1]+delta[1]],
-                                [start[2]]+[start[2]+delta[2]])
-            ax.plot(x, y,  color=color, lw=lw, marker=marker,
-                    ls=ls, markersize=markerSize)
-        return
-
-    def plotUnit(self, ax: Any, xlabel: str, ylabel: str, zlabel: str,
-                 x: float = 0, y: float = 0, z: float = 0, s: float = 1) -> None:  # unit axis
-        """
-        Coordinate systems: see plotLine
-
-        Args:
-           ax: axis to used for plotting
-           xlabel: x-label
-           ylabel: y-label
-           zlabel: z-label
-           x: x-coordinate of origin
-           y: y-coordinate of origin
-           z: z-coordinate of origin
-           s: scale
-        """
-        self.plotLine(ax, [x, y, z], [s, 0, 0], 'k', lw=3)
-        self.plotLine(ax, [x, y, z], [0, s, 0], 'k', lw=3)
-        self.plotLine(ax, [x, y, z], [0, 0, s], 'k', lw=3)
-        if self.plot2D == '3D':
-            ax.text(x+s,   y+0.1, z+0.1, xlabel)
-            ax.text(x+0.1, y+s,   z+0.1, ylabel)
-            ax.text(x+0.1, y+0.1, z+s, zlabel)
-        else:
-            ax.text(*(self.project(x+s,   y, z+0.1)+(xlabel,)))
-            ax.text(*(self.project(x+0.1, y+s, z+0.1) +
-                    (ylabel, {'ha': 'right'})))
-            ax.text(*(self.project(x+0.1, y, z+s)+(zlabel,)))
-        return
-
     def plot(self, poles: Any = None, unitCell: bool = True, cos: bool = True, annotate: bool = False,
              plot2D: str = '', scale: float = 2, fileName: str = '') -> None:
         """Plot rotated unit-cell in 3D, and possibly the pole-figure and specific poles
@@ -418,6 +166,97 @@ class Orientation:
             plt.show()
         return
 
+
+    def plotUnit(self, ax: Any, xlabel: str, ylabel: str, zlabel: str,
+                 x: float = 0, y: float = 0, z: float = 0, s: float = 1) -> None:  # unit axis
+        """
+        Coordinate systems: see plotLine
+
+        Args:
+           ax: axis to used for plotting
+           xlabel: x-label
+           ylabel: y-label
+           zlabel: z-label
+           x: x-coordinate of origin
+           y: y-coordinate of origin
+           z: z-coordinate of origin
+           s: scale
+        """
+        self.plotLine(ax, [x, y, z], [s, 0, 0], 'k', lw=3)
+        self.plotLine(ax, [x, y, z], [0, s, 0], 'k', lw=3)
+        self.plotLine(ax, [x, y, z], [0, 0, s], 'k', lw=3)
+        if self.plot2D == '3D':
+            ax.text(x+s,   y+0.1, z+0.1, xlabel)
+            ax.text(x+0.1, y+s,   z+0.1, ylabel)
+            ax.text(x+0.1, y+0.1, z+s, zlabel)
+        else:
+            ax.text(*(self.project(x+s,   y, z+0.1)+(xlabel,)))
+            ax.text(*(self.project(x+0.1, y+s, z+0.1) +
+                    (ylabel, {'ha': 'right'})))
+            ax.text(*(self.project(x+0.1, y, z+s)+(zlabel,)))
+        return
+
+
+    def plotLine(self, ax: Any, start: Any, delta: Any, color: str = 'k', lw: float = 1, ls: str = 'solid',
+                 markerSize: float | None = None) -> None:
+        """
+        Plot one line using given projection
+
+        Args:
+           ax: axis to plot into
+           start: start coordinate
+           delta: delta cooradinate (end-start)
+           color: color
+           lw: line width
+           ls: line style "solid",'dashed'
+           markerSize: size of marker (only used for non-lines: delta>0)
+        """
+        if np.linalg.norm(delta) < self.eps:
+            marker = 'o'
+            if markerSize is None:
+                markerSize = 7
+        else:
+            marker = None
+            markerSize = 0
+        if self.plot2D == '3D':
+            ax.plot([start[0]]+[start[0]+delta[0]],
+                    [start[1]]+[start[1]+delta[1]],
+                    [start[2]]+[start[2]+delta[2]],
+                    color=color, lw=lw, marker=marker, ls=ls, markersize=markerSize)
+        else:
+            x, y = self.project([start[0]]+[start[0]+delta[0]],
+                                [start[1]]+[start[1]+delta[1]],
+                                [start[2]]+[start[2]+delta[2]])
+            ax.plot(x, y,  color=color, lw=lw, marker=marker,
+                    ls=ls, markersize=markerSize)
+        return
+
+
+    def project(self, x: Any, y: Any, z: Any) -> tuple[np.ndarray, ...]:
+        """Project 3D coordinates onto the 2D plot plane given by self.plot2D
+
+        down-right: y, -x
+        up-left   : -y, x
+        right-up   : x,y
+        left-down: -x,-y
+        3D        : x,y,z
+
+        Args:
+           x: x-coordinate(s)
+           y: y-coordinate(s)
+           z: z-coordinate(s)
+
+        Returns:
+           projected coordinates: two arrays; three for "3D"
+        """
+        x, y, z = np.asarray(x), np.asarray(y), np.asarray(z)
+        projections = {'down-right': (y, -x), 'up-left': (-y, x), 'right-up': (x, y),
+                       'left-down': (-x, -y), '3D': (x, y, z)}
+        if self.plot2D not in projections:
+            raise ValueError(f'plot2D must be one of {', '.join(projections)}, not {self.plot2D!r}')
+        return projections[self.plot2D]
+
+
     def toScreen(self, equivalent: bool = True) -> None:
         """
         print Euler angles and HKL /UVW
@@ -437,5 +276,243 @@ class Orientation:
                 print(f'   [{angles[0]:5.1f}  {angles[1]:5.1f}  {angles[2]:5.1f}]')
         return
 
+    # @}
+
+
+    # @name CONVENTIONAL ROUTINES
+    # @{
+    def asEulers(self,
+                 notation: str = 'bunge',
+                 degrees: bool = False,
+                 standardRange: bool = False) -> np.ndarray:
+        """Return this orientation's Euler angles in the requested convention.
+
+        Args:
+           notation: only "bunge" (intrinsic ZXZ) is supported
+           degrees: return degrees instead of radians
+           standardRange: map phi1 and phi2 into [0, 2pi)
+
+        Returns:
+           Euler angles (phi1, Phi, phi2)
+        """
+        if notation.lower() not in ('bunge', 'zxz'):
+            raise ValueError('Only the Bunge/intrinsic ZXZ convention is supported')
+        return asBungeEulers(self.quaternion, degrees, standardRange)
+
+
+    def asMatrix(self) -> np.ndarray:
+        """Return this orientation as a 3-by-3 rotation matrix.
+
+        Returns:
+           rotation matrix
+        """
+        return self.quaternion.as_matrix()
+
+
+    def inFZ(self) -> bool:
+        """Check whether given Rodrigues vector falls into fundamental zone of own symmetry.
+
+        Returns:
+           True if inside the fundamental zone
+        """
+        return self.symmetry.inFZ(self.quaternion)
+
+
+    def equivalentQuaternions(self, who: Any = None) -> list[Rotation]:
+        """Return symmetry-equivalent quaternions, optionally selected by index.
+
+        Args:
+           who: indices of the symmetry operations [default: all]
+
+        Returns:
+           equivalent rotations
+        """
+        return self.symmetry.equivalentQuaternions(self.quaternion, who)
+
+
+    def equivalentOrientations(self, who: Any = None) -> list['Orientation']:
+        """Return symmetry-equivalent orientations, optionally selected by index.
+
+        Args:
+           who: indices of the symmetry operations [default: all]
+
+        Returns:
+           equivalent orientations
+        """
+        return [
+            Orientation(quaternion=q, symmetry=self.symmetry.lattice)
+            for q in self.equivalentQuaternions(who)
+        ]
+
+
+    def reduced(self) -> 'Orientation':
+        """Transform orientation to fall into fundamental zone according to symmetry
+
+        Returns:
+           equivalent orientation inside the fundamental zone
+        """
+        for me in self.symmetry.equivalentQuaternions(self.quaternion):
+            if self.symmetry.inFZ(me):
+                break
+        return Orientation(quaternion=me, symmetry=self.symmetry.lattice)
 
     # @}
+
+
+    ##
+    # @name MATERIAL SPECIFIC ROUTINES
+    # @{
+    def disorientation(self, other: 'Orientation', sst: bool = True) -> tuple['Orientation', int, int, bool]:
+        """Disorientation between myself and given other orientation.
+
+        Rotation axis falls into SST if SST == True.
+          (Currently requires same symmetry for both orientations.
+          Look into A. Heinz and P. Neumann 1991 for cases with differing sym.)
+
+         Args:
+          other: other orientation
+          sst: True (rotation axis falls into SST); False
+
+        Returns:
+          disorientation quaternion; indices of equivalent orientations; and
+          whether the result was conjugated
+        """
+        if self.symmetry != other.symmetry:
+            raise TypeError(
+                'disorientation between different symmetry classes not supported yet.')
+        misQ = self.quaternion.inv()*other.quaternion
+        mySymQs = self.symmetry.symmetryQuats() if sst else self.symmetry.symmetryQuats()[
+            :1]       # take all or only first sym operation
+        otherSymQs = other.symmetry.symmetryQuats()
+        for i, sA in enumerate(mySymQs):  # if not in SST: only one sA
+            for j, sB in enumerate(otherSymQs):  # changes always
+                candidate = sA.inv()*misQ*sB
+                for k, theQ in enumerate((candidate.inv(), candidate)):
+                    breaker = self.symmetry.inFZ(theQ) and (
+                        not sst or other.symmetry.inDisorientationSST(theQ))
+                    if breaker:
+                        break
+                if breaker:
+                    break
+            if breaker:
+                break
+        return (Orientation(quaternion=theQ, symmetry=self.symmetry.lattice),
+                # disorientation, own sym, other sym, self-->other: True, self<--other: False
+                i, j, k == 1)
+
+
+    def inversePole(self, axis: Any, proper: bool = False, sst: bool = True) -> tuple[np.ndarray, int]:
+        """Rotate an axis into the standard stereographic triangle using symmetry.
+
+        Args:
+          axis: vector in crystal orientation, e.g. [100]
+          proper: consider only vectors with z >= 0 using two neighboring SSTs;
+              this permits more positive results without changing the RGB value
+          sst: iterate through all equivalent and find the one in the SST
+
+        Returns:
+          vector of axis; index of the used symmetry operation
+        """
+        if sst:  # Pole requested to be within SST.
+            # test all symmetric equivalent quaternions
+            for i, q in enumerate(self.symmetry.equivalentQuaternions(self.quaternion)):
+                # align crystal direction to axis
+                pole = q.inv().apply(axis)
+                if self.symmetry.inSST(pole, proper):
+                    break                                                # found SST version
+        else:
+            # align crystal direction to axis
+            pole = self.quaternion.inv().apply(axis)
+        return (pole, i if sst else 0)
+
+
+    def ipfColor(self, axis: Any, proper: bool = False) -> np.ndarray:
+        """color of inverse pole figure for given axis
+
+        Args:
+           axis: axis of pole figure (ND=001)
+           proper: consider vectors with z >= 0 using two neighboring SSTs;
+               this permits more positive results without changing the RGB value
+
+        Returns:
+           vector of color (rgb)
+        """
+        color = np.zeros(3, 'd')
+        for q in self.symmetry.equivalentQuaternions(self.quaternion):
+            # align crystal direction to axis
+            pole = q.inv().apply(axis)
+            inSST, color = self.symmetry.inSST(pole, color=True, proper=proper)
+            if inSST:
+                break
+        return color
+
+
+    @classmethod
+    def average(cls,
+                orientations: list['Orientation'],
+                multiplicity: Any = None) -> 'Orientation':
+        """Return the average orientation
+
+        ref: F. Landis Markley, Yang Cheng, John Lucas Crassidis, and Yaakov Oshman,
+          Averaging Quaternions,
+          Journal of Guidance, Control, and Dynamics, Vol. 30, No. 4 (2007), pp. 1193-1197.
+          doi: 10.2514/1.28949
+
+        Usage:
+          * a = Orientation(eulers=np.radians([10, 10, 0]), symmetry='hexagonal')
+          * b = Orientation(eulers=np.radians([20, 0, 0]),  symmetry='hexagonal')
+          * avg = Orientation.average([a,b])
+
+        Args:
+          cls: class method (void)
+          orientations: list of orientations
+          multiplicity: --
+
+        Returns:
+          average orientation (not rotation) in radians
+        """
+        if not all(isinstance(item, Orientation) for item in orientations):
+            raise TypeError('Only instances of Orientation can be averaged.')
+        count = len(orientations)
+        if multiplicity is None or len(multiplicity) == 0:
+            multiplicity = np.ones(count, dtype='i')
+        # take first as reference
+        reference = orientations[0]
+        closestRotations = []
+        for o in orientations:
+            closest = o.equivalentOrientations(reference.disorientation(o, sst=False)[2])[
+                0]             # select sym orientation with lowest misorientation
+            closestRotations.append(closest.quaternion)
+        mean = Rotation.concatenate(closestRotations).mean(weights=multiplicity)
+        return Orientation(quaternion=mean,
+                           symmetry=reference.symmetry.lattice)
+
+    # @}
+
+
+    eulers = property(asEulers)
+    matrix = property(asMatrix)
+    infz = property(inFZ)
+
+
+    def __copy__(self) -> 'Orientation':
+        """Return a copy with the same rotation and symmetry.
+
+        Returns:
+           new orientation
+        """
+        return self.__class__(quaternion=self.quaternion, symmetry=self.symmetry.lattice)
+
+
+    def __repr__(self) -> str:
+        """Return symmetry, quaternion, matrix and Euler angles as text.
+
+        Returns:
+           multi-line description
+        """
+        matrix = '\n'.join('\t'.join(map(str, self.asMatrix()[i, :])) for i in range(3))
+        eulers = '\t'.join(map(str, self.asEulers('bunge', degrees=True)))
+        return (f'Symmetry: {self.symmetry}\n'
+                f'Quaternion: {self.quaternion}\n'
+                f'Matrix:\n{matrix}\n'
+                f'Bunge Eulers / deg: {eulers}')

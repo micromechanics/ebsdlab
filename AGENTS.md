@@ -18,6 +18,14 @@
 
 ## Conventions
 
+- The global rules in `~/.codex/AGENTS.md` apply, with these local decisions:
+  - Two empty lines above every `def`, also inside classes (except `__init__`).
+  - Single quotes for strings; docstrings keep triple double quotes.
+  - Keep existing comments, including the Doxygen group markers (`##`, `# @name`, `# @{`, `# @}`); move them with
+    their methods when reordering.
+  - Leave tests as they are; add or change tests only when asked. `pytest --mpl` is a visual check: run it only
+    when asked.
+
 - Do not regenerate baseline images unless the visual change is intentional and reviewed.
 - Baseline review, when a change alters images:
   1. `rm -rf tests/baseline_review && pytest --mpl --mpl-baseline-path=tests/baseline --mpl-results-path=tests/baseline_review --mpl-generate-summary=html`

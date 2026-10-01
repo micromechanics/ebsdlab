@@ -28,9 +28,6 @@ class EBSD:
     Uses quaternions and symmetries but not orientations
     """
 
-    ##
-    # @name INPUT METHODS
-    # @{
     def __init__(self, fileName: str | Path, symmetry: str = '') -> None:
         """
         read input file <br>
@@ -112,60 +109,391 @@ class EBSD:
         print('   Duration init: ', int(np.round(time.time()-startTime)), 'sec')
         return
 
-    def _setGrid(self, x: np.ndarray, y: np.ndarray) -> None:
+
+    ##
+    # @name PLOT METHODS
+    # @{
+    def plot(self, vector: np.ndarray, widthPixel: int | None = None, vmax: float | None = None,
+             vmin: float | None = None, interpolationType: str = 'nearest', cmap: Any = None,
+             show: bool = True, cbar: bool = True) -> Any:
         """
-        Derive grid parameters from row-major coordinates; the coordinates themselves are not stored.
+        given a class-vector, plot the vector as an image<br>
+        the x and y are given by the grid
 
         Args:
-           x: x-coordinates of all points
-           y: y-coordinates of all points
-        """
-        rowStarts = np.flatnonzero(np.diff(x) < 0) + 1
-        if len(rowStarts) == 0:
-            raise ValueError('EBSD data must contain more than one scan row.')
-        self.nPoints = len(x)
-        self.nRows = len(rowStarts) + 1
-        self.nColsOdd = int(rowStarts[0])
-        self.nColsEven = int(rowStarts[1] if len(rowStarts) > 1 else len(x)) - self.nColsOdd
-        self.x0, self.y0 = float(x[0]), float(y[0])
-        self.stepSizeX = float(x[1] - x[0])
-        self.stepSizeY = float(y[self.nColsOdd] - y[0])
-        self.xOffset = float(x[self.nColsOdd] - x[0])
-        self.grid = 'HexGrid' if abs(self.xOffset) > self.stepSizeX/10 else 'SqrGrid'
-        xGrid, yGrid = self.xy()
-        if not (np.allclose(xGrid, x, atol=self.stepSizeX/10) and np.allclose(yGrid, y, atol=self.stepSizeY/10)):
-            raise ValueError('EBSD data is not a complete, row-major rectangular or hexagonal grid.')
-        return
-
-    def xy(self, idx: Any = None) -> tuple[np.ndarray, np.ndarray]:
-        """
-        x- and y-coordinates of points, computed from the grid parameters
-
-        Args:
-           idx: point indices [if None: all points]
+           vector: vector to be plotted as a 2D image
+           widthPixel: rescale to horizontal size of the image [default: optimal pixel width]
+           vmax: rescale z-scale to maximal value
+           vmin: rescale z-scale to minimal value
+           interpolationType: interpolation type [default: "nearest" next-neighbor]
+           cmap: colormap [default: Spectral with masked points in black]
+           show: show the figure
+           cbar: add a colorbar
 
         Returns:
-           x, y
+           matplotlib figure
         """
-        i = np.arange(self.nPoints) if idx is None else np.asarray(idx)
-        pair, j = np.divmod(i, self.nColsOdd + self.nColsEven)
-        even = j >= self.nColsOdd  # 2nd row of the pair of rows
-        col = j - even*self.nColsOdd
-        return self.x0 + col*self.stepSizeX + even*self.xOffset, self.y0 + (2*pair+even)*self.stepSizeY
+        startTime = time.time()
+        # create a special cmap palette with blacK as value for bad-numbers
+        if cmap is None:
+            cmap = cm.Spectral
+            cmap.set_bad('k', 1.0)
+        z, self.imageExtent = self._image(vector, widthPixel, interpolationType)
+        z = z.astype(float)
+        mask, _ = self._image(~self.mask, widthPixel, interpolationType)
+        # plot if/if-not the maximum and minimum are given
+        fig, ax = plt.subplots()
+        im = ax.imshow(np.ma.masked_where(mask, z), extent=self.imageExtent, cmap=cmap, vmax=vmax, vmin=vmin,
+                       origin='upper')
+        if cbar:
+            fig.colorbar(im, ax=ax)
+        print('   Plot with x and y axis in [um]')
+        print('Duration plot: ', int(np.round(time.time()-startTime)), 'sec')
+        if show:
+            plt.show()
+        z *= 255/np.max(z)
+        self.image = z
+        return fig
 
-    @property
-    def x(self) -> np.ndarray:
-        """x-coordinates of all points"""
-        return self.xy()[0]
 
-    @property
-    def y(self) -> np.ndarray:
-        """y-coordinates of all points"""
-        return self.xy()[1]
+    def plotIPF(self, direction: str | int = 'ND', widthPixel: int | None = None, fileName: str = '',
+                interpolationType: str = 'nearest', show: bool = True) -> Any:
+        """
+        plot Inverse Pole Figure (IPF)
 
+        Args:
+           direction: default.."ND", "RD", "TD"; a number is used as widthPixel with "ND"
+           widthPixel: horizontal size of the image [default: optimal size based on data]
+           fileName: save to file instead of showing
+           interpolationType: interpolation type [default: "nearest"]
+           show: show the figure if no fileName is given
+
+        Returns:
+           matplotlib figure
+        """
+        startTime = time.time()
+        if direction == 'RD':
+            axis = [1, 0, 0]
+        elif direction == 'TD':
+            axis = [0, 1, 0]
+        elif direction == 'ND':
+            axis = [0, 0, 1]
+        else:  # if first argument specifies widthPixel
+            widthPixel = int(direction)
+            axis = [0, 0, 1]
+
+        # colors only for the points shown in the image
+        if interpolationType == 'nearest':
+            shown = np.unique(self._image(np.arange(self.nPoints), widthPixel)[0])
+        else:
+            shown = np.flatnonzero(self.vMask)
+        flags = np.zeros(len(shown), dtype=bool)
+        rgbsShown = np.zeros((3, len(shown)), dtype=float)
+        for sym in self.sym:
+            if not sym.lattice:
+                continue
+            equivQuaternions = sym.equivalentQuaternions(self.quaternions[shown])
+            for equivQuaternion in equivQuaternions:
+                pole = equivQuaternion.inv().apply(axis)
+                remainingFlags, remainingRgbs = sym.inSST(
+                    pole[~flags].T, color=True, proper=False)
+                if len(remainingRgbs.shape) == 2:
+                    rgbsShown[:, ~flags] = remainingRgbs
+                    flags[~flags] = remainingFlags
+        rgbs = np.zeros((3, self.nPoints), dtype=float)
+        rgbs[:, shown] = rgbsShown
+        fig = self.plotRGB(rgbs, widthPixel, interpolationType)
+        print('Duration plotIPF: ', int(np.round(time.time()-startTime)), 'sec')
+        if not fileName and show:
+            plt.show()
+        elif fileName:
+            plt.savefig(fileName, dpi=150, bbox_inches='tight')
+            plt.close()
+        return fig
+
+
+    def plotRGB(self, rgb: np.ndarray, widthPixel: int | None = None, interpolationType: str = 'nearest') -> Any:
+        """
+        given a RGB vector (same size as the other class vectors)
+        plot the vector as an image<br>
+        the x and y are given by the grid
+        USED INTERNALLY
+
+        Args:
+           rgb: matrix [3, classVectorSize] to be plotted as a 2D image
+           widthPixel: horizontal size of the image [default: optimal pixel width]
+           interpolationType: interpolation type [default: "nearest"]
+
+        Returns:
+           matplotlib figure
+        """
+        # masked points are black
+        rgb[:, ~self.mask] = 0
+        image, self.imageExtent = self._image(rgb.T, widthPixel, interpolationType)
+        self.image = (image*255).astype(np.uint8)
+        fig, ax = plt.subplots()
+        ax.imshow(self.image, extent=self.imageExtent, origin='upper')
+        return fig
+
+
+    def addSymbol(self, x: float, y: float, fileName: str = '', scale: float = 1., colorCube: str = 'black') -> None:
+        """
+        TODO: use version in ebsd_Orientation
+        Add symbol of crystal orientation (symmetry and rotation) to IPF at given location
+
+        Args:
+           x: x-coordinate
+           y: y-coordinate
+           fileName: export to file
+           scale: scale of symbol
+           colorCube: color of symbol
+        """
+        # axes fill the figure exactly, so the rendered canvas is the image without margins
+        fig = plt.figure(figsize=(6.4, 6.4/self.ratio), dpi=100)
+        ax = fig.add_axes((0, 0, 1, 1))
+        ax.imshow(self.image, extent=self.imageExtent, origin='upper', aspect='auto')
+        ax.axis('off')
+        iClose = self.addUnitCellOverlay(ax, x, y, scale, colorCube)
+        print('Euler angles at point:',
+              np.round(asBungeEulers(self.quaternions[iClose], degrees=True), 1))
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+        self.image = np.asarray(canvas.buffer_rgba())[..., :3].copy()
+        plt.close(fig)
+        plt.imshow(self.image, extent=self.imageExtent, origin='upper')
+        if not fileName:
+            plt.show()
+        else:
+            plt.savefig(fileName, dpi=150, bbox_inches='tight')
+            plt.close()
+        return
+
+
+    def addUnitCellOverlay(self, ax: Any, x: float, y: float, scale: float = 1., colorCube: str = 'black') -> int:
+        """
+        Draw the nearest orientation's unit cell onto an existing IPF axis.
+
+        This is the composable counterpart to :meth:`addSymbol`. It is useful
+        for applications which manage the figure themselves, such as the GUI.
+
+        Args:
+           ax: matplotlib axis containing the IPF map
+           x: x-coordinate in [um]
+           y: y-coordinate in [um]
+           scale: scale of unit cell
+           colorCube: color of unit cell
+
+        Returns:
+           index of the point whose orientation is drawn
+        """
+        iClose = int(self._nearestIndex(x, y))
+        iQuaternion = self.quaternions[iClose]
+        for sym in self.sym:
+            if not sym.lattice:
+                continue
+            for line in sym.unitCell():
+                start = iQuaternion.apply(np.array(line[:3], dtype=float)*scale)
+                end = iQuaternion.apply(np.array(line[3:], dtype=float)*scale)
+                # OIM coordinate system and ``imshow(origin='upper')``.
+                start = np.array([-start[1], -start[0], start[2]])
+                end = np.array([-end[1], -end[0], end[2]])
+                if start[2] < 0 and end[2] < 0:
+                    segments = [(start, end, 0.2)]
+                elif start[2] > 0 and end[2] > 0:
+                    segments = [(start, end, 2)]
+                else:
+                    delta = end-start
+                    mid = start+(-start[2]/delta[2])*delta
+                    if start[2] > 0:
+                        segments = [(start, mid, 2), (mid, end, 0.2)]
+                    else:
+                        segments = [(start, mid, 0.2), (mid, end, 2)]
+                for first, last, lw in segments:
+                    ax.plot([first[0]+x, last[0]+x], [first[1]+y, last[1]+y], color=colorCube, lw=lw)
+        return int(iClose)
+
+
+    def addScaleBar(self, fileName: str = '', site: str = 'BL', barLength: float | None = None,
+                    alpha: float = 0.5) -> Any:
+        """
+        Add scale-bar to image
+
+        Args:
+           fileName: if given, save to file
+           site: where to put the scale bar: bottom-left "BL" (default), bottom-right "BR",
+                 top-left "TL", top-right "TR"
+           barLength: length of scale bar. It is calculated if not given
+           alpha: transparency of scale bar background
+
+        Returns:
+           matplotlib figure
+        """
+        sites = {'BL': 'lower left', 'BR': 'lower right', 'TL': 'upper left', 'TR': 'upper right'}
+        fig, ax = plt.subplots()
+        ax.imshow(self.image, extent=self.imageExtent, origin='upper')
+        scaleBar = self.addScaleBarOverlay(ax, barLength, sites.get(site, 'lower left'))
+        scaleBar.patch.set_alpha(alpha)
+        ax.axis('off')
+        if not fileName:
+            plt.show()
+        else:
+            plt.savefig(fileName, dpi=150, bbox_inches='tight')
+            plt.close()
+        return fig
+
+
+    def addScaleBarOverlay(self, ax: Any, barLength: float | None = None, site: str = 'lower left') -> Any:
+        """
+        Add a scale bar to an existing map axis.
+
+        Unlike :meth:`addScaleBar`, this preserves the supplied Matplotlib
+        figure and is therefore suitable for interactive applications.
+
+        Args:
+           ax: Matplotlib axis containing an EBSD map in micrometres.
+           barLength: scale-bar length in micrometres; calculated if omitted.
+           site: Matplotlib anchored-artists location, e.g. ``"lower left"``.
+
+        Returns:
+           scale bar artist
+        """
+        from matplotlib.font_manager import FontProperties
+        from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+
+        if barLength is None:
+            # visible area of the last image; the whole map before the first plot
+            xLo, xHi, yHi, yLo = self.imageExtent if self.image.size else (0, self.width, self.height, 0)
+            width, height = xHi-xLo, yHi-yLo
+            digits = int(math.log10(round(width/4.)))
+            barLength = round(max(width, height) / 6., -digits)
+        scaleBar = AnchoredSizeBar(ax.transData, barLength,
+                                  str(barLength)+' '+'\u03BC'+'m', site,
+                                  pad=0.5, color='black', frameon=True,
+                                  size_vertical=barLength/15.,
+                                  fontproperties=FontProperties(size=13.5))
+        ax.add_artist(scaleBar)
+        return scaleBar
+
+
+    def plotPF(self, axis: Any = (1, 0, 0), points: bool = False, fileName: str = '',
+               color: str = '#1f77b4', alpha: float = 1.0, show: bool = True, density: int = 256, size: int = 2,
+               proj2D: str = 'up-left', vmin: float = 0.0, vmax: float = 1.0) -> Any:
+        """
+        plot pole figure
+
+        Projection onto 2D: cooradinate systems are given as xDirection-yDirection (z follows)
+        - down-right: [default in text books, mTex] RD = x = down; TD = y = right; ND = z = outOfPlane
+        - up-left: [default in OIM and here] RD = x = up; TD = y = left; ND = z = outOfPlane
+
+        Args:
+          axis:    axis to plot: default: axis=1,0,0
+          points:  plot individual points [default], or plot distribution
+          fileName: if given, save to file
+          color:   plot color
+          alpha:   alpha transparency
+          show:    show figure [default], False for subsequent plotting
+          density: how many points to plot on the distribution
+          size:    points: point size; distribution: amount of smoothing: higher more smoothing
+          proj2D:  orientation of 2D projection: [down-right, up-left, None]
+          vmin:    minimum value plotted, used as cut-off for transparency
+          vmax:    max. used in color coding, allows to focus on minor texture
+
+        Returns:
+          matplotlib figure; None for an unknown proj2D
+        """
+        startTime = time.time()
+        fig, ax = plt.subplots()
+        maxColor = tuple(np.array(colors.hex2color(color))*0.5)
+        for sym in self.sym:
+            if not sym.lattice:
+                continue
+            oHelp = Orientation(eulers=np.array([0., 0., 0.]), symmetry=sym.lattice)
+            axis = np.array(axis, dtype=float)
+            axis /= np.linalg.norm(axis)
+            mask = np.logical_and(self.mask, self.vMask)
+            xs, ys = [], []
+            for q in oHelp.symmetry.equivalentQuaternions(oHelp.quaternion):
+                conjAxis = q.apply(axis)
+                direction = self.quaternions.apply(conjAxis)
+                direction = direction[mask]  # filter mask
+                # filter upward dome
+                direction = direction[direction[:, 2] > 0]
+                direction[:, 0] /= direction[:, 2]+1.
+                direction[:, 1] /= direction[:, 2]+1.
+                xs.append(direction[:, 0])
+                ys.append(direction[:, 1])
+        x, y = np.concatenate(xs), np.concatenate(ys)
+        if points:
+            if proj2D == 'down-right':
+                ax.plot(-x, y, '.', color=maxColor,
+                        markersize=size)  # markersize=0.05
+            elif proj2D == 'up-left':
+                ax.plot(-y, x, '.', color=maxColor,
+                        markersize=size)  # markersize=0.05
+            else:
+                return
+            ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
+                    np.sin(np.linspace(0, 2*np.pi, 100)), 'k-')
+            ax.plot([-1, 1], [0, 0], 'k--')
+            ax.plot([0, 0], [-1, 1], 'k--')
+        else:
+            cmap = colors.LinearSegmentedColormap.from_list(
+                'my', [(1, 1, 1), maxColor])
+            center = (density - 1)/2
+            imgDim = density+2*size
+            img = np.zeros((imgDim, imgDim))
+            x, y = np.nan_to_num(x), np.nan_to_num(y)
+            if proj2D == 'down-right':
+                zippedList = list(zip(-x, y))
+            elif proj2D == 'up-left':
+                zippedList = list(zip(-y, x))
+            else:
+                return
+            for xCoordinate, yCoordinate in zippedList:
+                ix = int((xCoordinate - -1.) * center) + size
+                iy = int((yCoordinate - -1.) * center) + size
+                if 0 <= ix < imgDim and 0 <= iy < imgDim:
+                    img[iy][ix] += 1
+            img = ndi.gaussian_filter(
+                img, (size, size))  # gaussian convolution
+            img /= np.max(img)                               # normalize
+            # filter out low values to make transparent
+            img[img < vmin] = np.nan
+            ax.imshow(img, cmap=cmap, alpha=alpha,
+                      vmin=0.0, vmax=vmax, origin='lower',
+                      extent=(-1, 1, -1, 1))
+            ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
+                    np.sin(np.linspace(0, 2*np.pi, 100)), 'k-', lw=2)
+            ax.plot([0, 0], [-1, 1], 'k--', lw=1)
+            ax.plot([-1, 1], [0, 0], 'k--', lw=1)
+            # plt.colorbar()
+        ax.set_aspect('equal', adjustable='box')
+        ax.set_xlim((-1, 1))
+        ax.set_ylim((-1, 1))
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.axis('off')
+        print('Duration plotPF: ', int(np.round(time.time()-startTime)), 'sec')
+        if not fileName and show:
+            plt.show()
+        elif fileName:
+            plt.savefig(fileName, dpi=150, bbox_inches='tight')
+            plt.clf()
+            plt.cla()
+        return fig
+
+    # @}
+
+
+    ##
+    # @name INPUT METHODS
+    # @{
     def loadANG(self, fileName: str = '') -> None:
         """
         Load .ang file: filename saved in self. No need to use it
+
+        Args:
+           fileName: file to read [default: self.fileName]
         """
         if fileName:
             self.fileName = fileName
@@ -186,7 +514,7 @@ class EBSD:
                         value = value[0]
                         try:
                             value = float(value)
-                        except:
+                        except ValueError:
                             pass
                     keyValues[index] = value
                     break
@@ -210,6 +538,7 @@ class EBSD:
         fileHandle.close()
         del data
         return
+
 
     def loadTXT(self, fileName: str = '', update: bool = False) -> None:
         """
@@ -318,44 +647,15 @@ class EBSD:
         print('Duration loadTXT: ', int(np.round(time.time()-startTime)), 'sec')
         return
 
-    def writeANG(self, fileName: str) -> None:
-        """
-        write body of ang file
-
-        Args:
-           fileName: file name
-        """
-        startTime = time.time()
-        fileOut = open(fileName, 'w')
-        fileOut.write('# MaterialName void\n')
-        fileOut.write('# Formula \n')
-        # adopt for HCP (fcc and bcc the same)
-        fileOut.write('# Symmetry 43\n')
-        fileOut.write('# LatticeConstants 1.0 1.0 1.0 90.0 90.0 90.0\n')
-        fileOut.write('# NumberFamilies 4\n')
-        fileOut.write('# khlFamilies 1 1 1 1 0.0\n')  # adopt for HCP
-        fileOut.write('# khlFamilies 2 0 0 1 0.0\n')
-        fileOut.write('# khlFamilies 2 2 0 1 0.0\n')
-        fileOut.write('# khlFamilies 3 1 1 1 0.0\n')
-        fileOut.write(f'#\n# GRID: {self.grid}\n#\n')
-        xs, ys = self.xy()
-        for i in range(self.nPoints):
-            phi1, phi, phi2 = tuple(asBungeEulers(self.quaternions[i]))
-            fileOut.write(
-                f' {phi1:8.5f} {phi:8.5f} {phi2:8.5f} {xs[i]:12.5f}'
-                f' {ys[i]:12.5f} {self.iq[i]:8.3f} {self.ci[i]:6.3f}'
-                f' {self.phaseID[i]:2d} {self.semSignal[i]:6d} {self.fit[i]:7.3f}\n'
-            )
-        fileOut.close()
-        print('Duration writeANG: ', int(
-            np.round(time.time()-startTime)), 'sec')
-        return
 
     def loadOSC(self, fileName: str = '') -> None:
         """
         Load .osc file; filename saved in self. No need to use it.
         Copied from mtex and translated into python
         Warning: SEMsignal not parsed correctly
+
+        Args:
+           fileName: file to read [default: self.fileName]
         """
         print('TODO: Symmetry has to be read and used')
         if fileName:
@@ -406,10 +706,14 @@ class EBSD:
         del data
         return
 
+
     def loadCRC(self, fileName: str = '') -> None:
         """
         Load .crc file; filename saved in self. No need to use it.
         Copied from mtex and translated into python
+
+        Args:
+           fileName: file to read [default: self.fileName]; the .cpr file of the same name holds the metadata
         """
         if fileName:
             self.fileName = fileName
@@ -428,7 +732,7 @@ class EBSD:
             key, value = line.split('=')[0], line.split('=')[1]
             try:
                 cprData[title][key.lower()] = float(value)
-            except:
+            except ValueError:
                 cprData[title][key.lower()] = value.lower()
         cprFile.close()
         # print "META DATA",cprData
@@ -510,9 +814,14 @@ class EBSD:
                 self.sym), np.max(self.phaseID)-np.min(self.phaseID)+1)
         return
 
+
     def loadVoid(self, rotation: str) -> None:
         """
         rotation angles in degree
+
+        Args:
+           rotation: Euler angles "phi1|Phi|phi2" in degrees, optionally followed by "|spread" (standard deviation
+                     of the random scatter in radians) and "|numberPerAxis" [default: 6]; without "|": no rotation
         """
         numPerAxis, distrib = 6, 0.0
         if '|' in rotation:
@@ -554,21 +863,23 @@ class EBSD:
         return
 
     # @}
+
+
     ##
     # @name Mask and Path routines
     # Masked areas are plotted in black. Initially no point is part of the mask;
     # all points are false.
     # @{
-
     def maskCI(self, ci: float) -> None:
         """
         masked all points off, which have a CI less than: good points=False, bad points=True
 
         Args:
-           CI: critical CI
+           ci: critical CI
         """
         self.mask = self.ci > ci
         return
+
 
     def maskReset(self) -> None:
         """
@@ -576,6 +887,7 @@ class EBSD:
         """
         self.mask = self.ci > -1
         return
+
 
     def removePointsOutsideMask(self) -> None:
         """
@@ -585,6 +897,7 @@ class EBSD:
         self.ci[~self.mask] = -1.0
         self.fit[~self.mask] = 180.0
         return
+
 
     def setVMask(self, every: int = 1) -> None:
         """
@@ -598,6 +911,7 @@ class EBSD:
         self.vMask[::every] = True
         self.vMaskEvery = every
         return
+
 
     def cropVMask(self, xmin: float | None = None, ymin: float | None = None,
                   xmax: float | None = None, ymax: float | None = None) -> None:
@@ -616,41 +930,23 @@ class EBSD:
         self.vMask = self.vMask & (x >= xmin) & (x <= xmax) & (y >= ymin) & (y <= ymax)
         return
 
-    def neighbors(self, idx: int | None = None, layers: int = 1) -> np.ndarray | None:
+
+    def xy(self, idx: Any = None) -> tuple[np.ndarray, np.ndarray]:
         """
-        identify neighboring indexes
+        x- and y-coordinates of points, computed from the grid parameters
 
         Args:
-           idx: index to find [if None: calculate all]
-           layers: number of neighboring layers
+           idx: point indices [if None: all points]
 
         Returns:
-         array of neighbors; invalid points have a value=-10
+           x, y
         """
-        if layers != 1:
-            print('number of layers not implemented')
-            return None
-        i = np.arange(self.nPoints) if idx is None else np.atleast_1d(idx)
-        period = self.nColsOdd + self.nColsEven
-        pair, j = np.divmod(i, period)
-        even = (j >= self.nColsOdd).astype(int)  # 2nd row of the pair of rows
-        row, col = 2*pair + even, j - even*self.nColsOdd
-        if self.grid == 'HexGrid':
-            # first of the two touching columns in the rows above and below; depends on shift direction
-            shift = int(self.xOffset > 0)
-            lower = col + np.where(even, shift-1, -shift)
-            nRow = row[:, None] + np.array([-1, -1, 0, 0, 1, 1])
-            nCol = np.stack([lower, lower+1, col-1, col+1, lower, lower+1], axis=1)
-        else:
-            nRow = row[:, None] + np.array([-1, 0, 0, 1])
-            nCol = np.stack([col, col-1, col+1, col], axis=1)
-        rowLength = np.where(nRow % 2, self.nColsEven, self.nColsOdd)
-        neighbors = (nRow//2)*period + (nRow % 2)*self.nColsOdd + nCol
-        valid = (nRow >= 0) & (nRow < self.nRows) & (nCol >= 0) & (nCol < rowLength) & (neighbors < self.nPoints)
-        neighbors[~valid] = -10
-        if idx is not None:
-            return neighbors[0]
-        return neighbors
+        i = np.arange(self.nPoints) if idx is None else np.asarray(idx)
+        pair, j = np.divmod(i, self.nColsOdd + self.nColsEven)
+        even = j >= self.nColsOdd  # 2nd row of the pair of rows
+        col = j - even*self.nColsOdd
+        return self.x0 + col*self.stepSizeX + even*self.xOffset, self.y0 + (2*pair+even)*self.stepSizeY
+
 
     def calcKAM(self, layers: int = 1) -> None:
         """
@@ -697,10 +993,127 @@ class EBSD:
             np.round(time.time()-startTime)), 'sec')
         return
 
+
+    def neighbors(self, idx: int | None = None, layers: int = 1) -> np.ndarray | None:
+        """
+        identify neighboring indexes
+
+        Args:
+           idx: index to find [if None: calculate all]
+           layers: number of neighboring layers
+
+        Returns:
+         array of neighbors; invalid points have a value=-10
+        """
+        if layers != 1:
+            print('number of layers not implemented')
+            return None
+        i = np.arange(self.nPoints) if idx is None else np.atleast_1d(idx)
+        period = self.nColsOdd + self.nColsEven
+        pair, j = np.divmod(i, period)
+        even = (j >= self.nColsOdd).astype(int)  # 2nd row of the pair of rows
+        row, col = 2*pair + even, j - even*self.nColsOdd
+        if self.grid == 'HexGrid':
+            # first of the two touching columns in the rows above and below; depends on shift direction
+            shift = int(self.xOffset > 0)
+            lower = col + np.where(even, shift-1, -shift)
+            nRow = row[:, None] + np.array([-1, -1, 0, 0, 1, 1])
+            nCol = np.stack([lower, lower+1, col-1, col+1, lower, lower+1], axis=1)
+        else:
+            nRow = row[:, None] + np.array([-1, 0, 0, 1])
+            nCol = np.stack([col, col-1, col+1, col], axis=1)
+        rowLength = np.where(nRow % 2, self.nColsEven, self.nColsOdd)
+        neighbors = (nRow//2)*period + (nRow % 2)*self.nColsOdd + nCol
+        valid = (nRow >= 0) & (nRow < self.nRows) & (nCol >= 0) & (nCol < rowLength) & (neighbors < self.nPoints)
+        neighbors[~valid] = -10
+        if idx is not None:
+            return neighbors[0]
+        return neighbors
+
     # @}
-    ##
-    # @name PLOT METHODS
-    # @{
+
+
+    def writeANG(self, fileName: str) -> None:
+        """
+        write body of ang file
+
+        Args:
+           fileName: file name
+        """
+        startTime = time.time()
+        fileOut = open(fileName, 'w')
+        fileOut.write('# MaterialName void\n')
+        fileOut.write('# Formula \n')
+        # adopt for HCP (fcc and bcc the same)
+        fileOut.write('# Symmetry 43\n')
+        fileOut.write('# LatticeConstants 1.0 1.0 1.0 90.0 90.0 90.0\n')
+        fileOut.write('# NumberFamilies 4\n')
+        fileOut.write('# khlFamilies 1 1 1 1 0.0\n')  # adopt for HCP
+        fileOut.write('# khlFamilies 2 0 0 1 0.0\n')
+        fileOut.write('# khlFamilies 2 2 0 1 0.0\n')
+        fileOut.write('# khlFamilies 3 1 1 1 0.0\n')
+        fileOut.write(f'#\n# GRID: {self.grid}\n#\n')
+        xs, ys = self.xy()
+        for i in range(self.nPoints):
+            phi1, phi, phi2 = tuple(asBungeEulers(self.quaternions[i]))
+            fileOut.write(
+                f' {phi1:8.5f} {phi:8.5f} {phi2:8.5f} {xs[i]:12.5f}'
+                f' {ys[i]:12.5f} {self.iq[i]:8.3f} {self.ci[i]:6.3f}'
+                f' {self.phaseID[i]:2d} {self.semSignal[i]:6d} {self.fit[i]:7.3f}\n'
+            )
+        fileOut.close()
+        print('Duration writeANG: ', int(
+            np.round(time.time()-startTime)), 'sec')
+        return
+
+
+    @property
+    def x(self) -> np.ndarray:
+        """
+        x-coordinates of all points
+
+        Returns:
+           x-coordinates in [um]
+        """
+        return self.xy()[0]
+
+
+    @property
+    def y(self) -> np.ndarray:
+        """
+        y-coordinates of all points
+
+        Returns:
+           y-coordinates in [um]
+        """
+        return self.xy()[1]
+
+
+    def _setGrid(self, x: np.ndarray, y: np.ndarray) -> None:
+        """
+        Derive grid parameters from row-major coordinates; the coordinates themselves are not stored.
+
+        Args:
+           x: x-coordinates of all points
+           y: y-coordinates of all points
+        """
+        rowStarts = np.flatnonzero(np.diff(x) < 0) + 1
+        if len(rowStarts) == 0:
+            raise ValueError('EBSD data must contain more than one scan row.')
+        self.nPoints = len(x)
+        self.nRows = len(rowStarts) + 1
+        self.nColsOdd = int(rowStarts[0])
+        self.nColsEven = int(rowStarts[1] if len(rowStarts) > 1 else len(x)) - self.nColsOdd
+        self.x0, self.y0 = float(x[0]), float(y[0])
+        self.stepSizeX = float(x[1] - x[0])
+        self.stepSizeY = float(y[self.nColsOdd] - y[0])
+        self.xOffset = float(x[self.nColsOdd] - x[0])
+        self.grid = 'HexGrid' if abs(self.xOffset) > self.stepSizeX/10 else 'SqrGrid'
+        xGrid, yGrid = self.xy()
+        if not (np.allclose(xGrid, x, atol=self.stepSizeX/10) and np.allclose(yGrid, y, atol=self.stepSizeY/10)):
+            raise ValueError('EBSD data is not a complete, row-major rectangular or hexagonal grid.')
+        return
+
 
     def _image(self, values: np.ndarray, widthPixel: int | None = None,
                interpolationType: str = 'nearest') -> tuple[np.ndarray, tuple[float, float, float, float]]:
@@ -737,6 +1150,7 @@ class EBSD:
             yAxis = yLo + (np.floor((yAxis-yLo)/yBlock)+0.5)*yBlock
         return values[self._nearestIndex(xAxis[None, :], yAxis[:, None])], extent
 
+
     def _nearestIndex(self, x: Any, y: Any) -> np.ndarray:
         """
         Index of the grid point closest to x, y: row from y, then column within that row from x
@@ -744,6 +1158,9 @@ class EBSD:
         Args:
            x: x-coordinate(s) in [um]; broadcast with y
            y: y-coordinate(s) in [um]
+
+        Returns:
+           point indices, of the broadcast shape of x and y
         """
         row = np.clip(np.rint((np.asarray(y)-self.y0)/self.stepSizeY).astype(int), 0, self.nRows-1)
         even = row % 2
@@ -751,340 +1168,3 @@ class EBSD:
         col = np.clip(col, 0, np.where(even, self.nColsEven, self.nColsOdd)-1)
         idx = (row//2)*(self.nColsOdd+self.nColsEven) + even*self.nColsOdd + col
         return np.minimum(idx, self.nPoints-1)
-
-    def plot(self, vector: np.ndarray, widthPixel: int | None = None, vmax: float | None = None,
-             vmin: float | None = None, interpolationType: str = 'nearest', cmap: Any = None,
-             show: bool = True, cbar: bool = True) -> Any:
-        """
-        given a class-vector, plot the vector as an image<br>
-        the x and y are given by the grid
-
-        Args:
-           vector: vector to be plotted as a 2D image
-           widthPixel: rescale to horizontal size of the image [default: optimal pixel width]
-           vmax: rescale z-scale to maximal value
-           vmin: rescale z-scale to minimal value
-           interpolationType: interpolation type [default: "nearest" next-neighbor]
-        """
-        startTime = time.time()
-        # create a special cmap palette with blacK as value for bad-numbers
-        if cmap is None:
-            cmap = cm.Spectral
-            cmap.set_bad('k', 1.0)
-        z, self.imageExtent = self._image(vector, widthPixel, interpolationType)
-        z = z.astype(float)
-        mask, _ = self._image(~self.mask, widthPixel, interpolationType)
-        # plot if/if-not the maximum and minimum are given
-        fig, ax = plt.subplots()
-        im = ax.imshow(np.ma.masked_where(mask, z), extent=self.imageExtent, cmap=cmap, vmax=vmax, vmin=vmin,
-                       origin='upper')
-        if cbar:
-            fig.colorbar(im, ax=ax)
-        print('   Plot with x and y axis in [um]')
-        print('Duration plot: ', int(np.round(time.time()-startTime)), 'sec')
-        if show:
-            plt.show()
-        z *= 255/np.max(z)
-        self.image = z
-        return fig
-
-    def plotRGB(self, rgb: np.ndarray, widthPixel: int | None = None, interpolationType: str = 'nearest') -> Any:
-        """
-        given a RGB vector (same size as the other class vectors)
-        plot the vector as an image<br>
-        the x and y are given by the grid
-        USED INTERNALLY
-
-        Args:
-           rgb: matrix [3, classVectorSize] to be plotted as a 2D image
-           widthPixel: horizontal size of the image [default: optimal pixel width]
-           interpolationType: interpolation type [default: "nearest"]
-        """
-        # masked points are black
-        rgb[:, ~self.mask] = 0
-        image, self.imageExtent = self._image(rgb.T, widthPixel, interpolationType)
-        self.image = (image*255).astype(np.uint8)
-        fig, ax = plt.subplots()
-        ax.imshow(self.image, extent=self.imageExtent, origin='upper')
-        return fig
-
-    def plotIPF(self, direction: str | int = 'ND', widthPixel: int | None = None, fileName: str = '',
-                interpolationType: str = 'nearest', show: bool = True) -> Any:
-        """
-        plot Inverse Pole Figure (IPF)
-
-        Args:
-           direction: default.."ND", "RD", "TD"
-           widthPixel: horizontal size of the image [default: optimal size based on data]
-           interpolationType: interpolation type [default: "nearest"]
-           fileName: save to file instead of showing
-        """
-        startTime = time.time()
-        if direction == 'RD':
-            axis = [1, 0, 0]
-        elif direction == 'TD':
-            axis = [0, 1, 0]
-        elif direction == 'ND':
-            axis = [0, 0, 1]
-        else:  # if first argument specifies widthPixel
-            widthPixel = int(direction)
-            axis = [0, 0, 1]
-
-        # colors only for the points shown in the image
-        if interpolationType == 'nearest':
-            shown = np.unique(self._image(np.arange(self.nPoints), widthPixel)[0])
-        else:
-            shown = np.flatnonzero(self.vMask)
-        flags = np.zeros(len(shown), dtype=bool)
-        rgbsShown = np.zeros((3, len(shown)), dtype=float)
-        for sym in self.sym:
-            if not sym.lattice:
-                continue
-            equivQuaternions = sym.equivalentQuaternions(self.quaternions[shown])
-            for equivQuaternion in equivQuaternions:
-                pole = equivQuaternion.inv().apply(axis)
-                remainingFlags, remainingRgbs = sym.inSST(
-                    pole[~flags].T, color=True, proper=False)
-                if len(remainingRgbs.shape) == 2:
-                    rgbsShown[:, ~flags] = remainingRgbs
-                    flags[~flags] = remainingFlags
-        rgbs = np.zeros((3, self.nPoints), dtype=float)
-        rgbs[:, shown] = rgbsShown
-        fig = self.plotRGB(rgbs, widthPixel, interpolationType)
-        print('Duration plotIPF: ', int(np.round(time.time()-startTime)), 'sec')
-        if not fileName and show:
-            plt.show()
-        elif fileName:
-            plt.savefig(fileName, dpi=150, bbox_inches='tight')
-            plt.close()
-        return fig
-
-
-    def addUnitCellOverlay(self, ax: Any, x: float, y: float, scale: float = 1., colorCube: str = 'black') -> int:
-        """Draw the nearest orientation's unit cell onto an existing IPF axis.
-
-        This is the composable counterpart to :meth:`addSymbol`. It is useful
-        for applications which manage the figure themselves, such as the GUI.
-        """
-        def plotLine(start: np.ndarray, delta: np.ndarray, color: str = 'k', lw: float = 1) -> None:
-            ax.plot([start[0]]+[start[0]+delta[0]],
-                    [start[1]]+[start[1]+delta[1]], color=color, lw=lw)
-
-        iClose = int(self._nearestIndex(x, y))
-        iQuaternion = self.quaternions[iClose]
-        for sym in self.sym:
-            if not sym.lattice:
-                continue
-            for line in sym.unitCell():
-                start = iQuaternion.apply(np.array(line[:3], dtype=float)*scale)
-                end = iQuaternion.apply(np.array(line[3:], dtype=float)*scale)
-                # OIM coordinate system and ``imshow(origin='upper')``.
-                start = np.array([-start[1], -start[0], start[2]])
-                end = np.array([-end[1], -end[0], end[2]])
-                location = np.array([x, y, 0])
-                if start[2] < 0 and end[2] < 0:
-                    plotLine(start+location, end-start, color=colorCube, lw=0.2)
-                elif start[2] > 0 and end[2] > 0:
-                    plotLine(start+location, end-start, color=colorCube, lw=2)
-                else:
-                    delta = end-start
-                    mid = start+(-start[2]/delta[2])*delta
-                    if start[2] > 0:
-                        plotLine(start+location, mid-start, color=colorCube, lw=2)
-                        plotLine(mid+location, end-mid, color=colorCube, lw=0.2)
-                    else:
-                        plotLine(start+location, mid-start, color=colorCube, lw=0.2)
-                        plotLine(mid+location, end-mid, color=colorCube, lw=2)
-        return int(iClose)
-
-
-    def addSymbol(self, x: float, y: float, fileName: str = '', scale: float = 1., colorCube: str = 'black') -> None:
-        """
-        TODO: use version in ebsd_Orientation
-        Add symbol of crystal orientation (symmetry and rotation) to IPF at given location
-
-        Args:
-           x: x-coordinate
-           y: y-coordinate
-           fileName: export to file
-           scale: scale of symbol
-           colorCube: color of symbol
-        """
-        # axes fill the figure exactly, so the rendered canvas is the image without margins
-        fig = plt.figure(figsize=(6.4, 6.4/self.ratio), dpi=100)
-        ax = fig.add_axes((0, 0, 1, 1))
-        ax.imshow(self.image, extent=self.imageExtent, origin='upper', aspect='auto')
-        ax.axis('off')
-        iClose = self.addUnitCellOverlay(ax, x, y, scale, colorCube)
-        print('Euler angles at point:',
-              np.round(asBungeEulers(self.quaternions[iClose], degrees=True), 1))
-        canvas = FigureCanvasAgg(fig)
-        canvas.draw()
-        self.image = np.asarray(canvas.buffer_rgba())[..., :3].copy()
-        plt.close(fig)
-        plt.imshow(self.image, extent=self.imageExtent, origin='upper')
-        if not fileName:
-            plt.show()
-        else:
-            plt.savefig(fileName, dpi=150, bbox_inches='tight')
-            plt.close()
-        return
-
-
-    def addScaleBar(self, fileName: str = '', site: str = 'BL', barLength: float | None = None,
-                    alpha: float = 0.5) -> Any:
-        """
-        Add scale-bar to image
-
-        Args:
-           fileName: if given, save to file
-           site: where to put the scale bar: bottom-left "BL" (default), bottom-right "BR",
-                 top-left "TL", top-right "TR"
-           barLength: length of scale bar. It is calculated if not given
-           alpha: transparency of scale bar background
-        """
-        sites = {'BL': 'lower left', 'BR': 'lower right', 'TL': 'upper left', 'TR': 'upper right'}
-        fig, ax = plt.subplots()
-        ax.imshow(self.image, extent=self.imageExtent, origin='upper')
-        scaleBar = self.addScaleBarOverlay(ax, barLength, sites.get(site, 'lower left'))
-        scaleBar.patch.set_alpha(alpha)
-        ax.axis('off')
-        if not fileName:
-            plt.show()
-        else:
-            plt.savefig(fileName, dpi=150, bbox_inches='tight')
-            plt.close()
-        return fig
-
-    def addScaleBarOverlay(self, ax: Any, barLength: float | None = None, site: str = 'lower left') -> Any:
-        """Add a scale bar to an existing map axis.
-
-        Unlike :meth:`addScaleBar`, this preserves the supplied Matplotlib
-        figure and is therefore suitable for interactive applications.
-
-        Args:
-           ax: Matplotlib axis containing an EBSD map in micrometres.
-           barLength: scale-bar length in micrometres; calculated if omitted.
-           site: Matplotlib anchored-artists location, e.g. ``"lower left"``.
-        """
-        from matplotlib.font_manager import FontProperties
-        from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
-
-        if barLength is None:
-            # visible area of the last image; the whole map before the first plot
-            xLo, xHi, yHi, yLo = self.imageExtent if self.image.size else (0, self.width, self.height, 0)
-            width, height = xHi-xLo, yHi-yLo
-            digits = int(math.log10(round(width/4.)))
-            barLength = round(max(width, height) / 6., -digits)
-        scaleBar = AnchoredSizeBar(ax.transData, barLength,
-                                  str(barLength)+' '+'\u03BC'+'m', site,
-                                  pad=0.5, color='black', frameon=True,
-                                  size_vertical=barLength/15.,
-                                  fontproperties=FontProperties(size=13.5))
-        ax.add_artist(scaleBar)
-        return scaleBar
-
-    def plotPF(self, axis: Any = (1, 0, 0), points: bool = False, fileName: str = '',
-               color: str = '#1f77b4', alpha: float = 1.0, show: bool = True, density: int = 256, size: int = 2,
-               proj2D: str = 'up-left', vmin: float = 0.0, vmax: float = 1.0) -> Any:
-        """
-        plot pole figure
-
-        Projection onto 2D: cooradinate systems are given as xDirection-yDirection (z follows)
-        - down-right: [default in text books, mTex] RD = x = down; TD = y = right; ND = z = outOfPlane
-        - up-left: [default in OIM and here] RD = x = up; TD = y = left; ND = z = outOfPlane
-
-        Args:
-          axis:    axis to plot: default: axis=1,0,0
-          points:  plot individual points [default], or plot distribution
-          fileName: if given, save to file
-          color:   plot color
-          alpha:   alpha transparency
-          show:    show figure [default], False for subsequent plotting
-          density: how many points to plot on the distribution
-          size:    points: point size; distribution: amount of smoothing: higher more smoothing
-          proj2D:  orientation of 2D projection: [down-right, up-left, None]
-          vmin:    minimum value plotted, used as cut-off for transparency
-          vmax:    max. used in color coding, allows to focus on minor texture
-        """
-        startTime = time.time()
-        fig, ax = plt.subplots()
-        maxColor = tuple(np.array(colors.hex2color(color))*0.5)
-        for sym in self.sym:
-            if not sym.lattice:
-                continue
-            oHelp = Orientation(eulers=np.array([0., 0., 0.]), symmetry=sym.lattice)
-            axis = np.array(axis, dtype=float)
-            axis /= np.linalg.norm(axis)
-            mask = np.logical_and(self.mask, self.vMask)
-            xs, ys = [], []
-            for q in oHelp.symmetry.equivalentQuaternions(oHelp.quaternion):
-                conjAxis = q.apply(axis)
-                direction = self.quaternions.apply(conjAxis)
-                direction = direction[mask]  # filter mask
-                # filter upward dome
-                direction = direction[direction[:, 2] > 0]
-                direction[:, 0] /= direction[:, 2]+1.
-                direction[:, 1] /= direction[:, 2]+1.
-                xs.append(direction[:, 0])
-                ys.append(direction[:, 1])
-        x, y = np.concatenate(xs), np.concatenate(ys)
-        if points:
-            if proj2D == 'down-right':
-                ax.plot(-x, y, '.', color=maxColor,
-                        markersize=size)  # markersize=0.05
-            elif proj2D == 'up-left':
-                ax.plot(-y, x, '.', color=maxColor,
-                        markersize=size)  # markersize=0.05
-            else:
-                return
-            ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
-                    np.sin(np.linspace(0, 2*np.pi, 100)), 'k-')
-            ax.plot([-1, 1], [0, 0], 'k--')
-            ax.plot([0, 0], [-1, 1], 'k--')
-        else:
-            cmap = colors.LinearSegmentedColormap.from_list(
-                'my', [(1, 1, 1), maxColor])
-            center = (density - 1)/2
-            imgDim = density+2*size
-            img = np.zeros((imgDim, imgDim))
-            x, y = np.nan_to_num(x), np.nan_to_num(y)
-            if proj2D == 'down-right':
-                zippedList = list(zip(-x, y))
-            elif proj2D == 'up-left':
-                zippedList = list(zip(-y, x))
-            else:
-                return
-            for xCoordinate, yCoordinate in zippedList:
-                ix = int((xCoordinate - -1.) * center) + size
-                iy = int((yCoordinate - -1.) * center) + size
-                if 0 <= ix < imgDim and 0 <= iy < imgDim:
-                    img[iy][ix] += 1
-            img = ndi.gaussian_filter(
-                img, (size, size))  # gaussian convolution
-            img /= np.max(img)                               # normalize
-            # filter out low values to make transparent
-            img[img < vmin] = np.nan
-            ax.imshow(img, cmap=cmap, alpha=alpha,
-                      vmin=0.0, vmax=vmax, origin='lower',
-                      extent=(-1, 1, -1, 1))
-            ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
-                    np.sin(np.linspace(0, 2*np.pi, 100)), 'k-', lw=2)
-            ax.plot([0, 0], [-1, 1], 'k--', lw=1)
-            ax.plot([-1, 1], [0, 0], 'k--', lw=1)
-            # plt.colorbar()
-        ax.set_aspect('equal', adjustable='box')
-        ax.set_xlim((-1, 1))
-        ax.set_ylim((-1, 1))
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.axis('off')
-        print('Duration plotPF: ', int(np.round(time.time()-startTime)), 'sec')
-        if not fileName and show:
-            plt.show()
-        elif fileName:
-            plt.savefig(fileName, dpi=150, bbox_inches='tight')
-            plt.clf()
-            plt.cla()
-        return fig
-    # @}

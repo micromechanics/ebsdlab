@@ -17,11 +17,11 @@ from ..ebsd import EBSD, SUPPORTED_SUFFIXES
 from .rangeSelector import RangeSelector
 
 
-
 class EBSDGui(QMainWindow):
     """A compact UI for the most common ebsdlab plot workflows."""
 
     def __init__(self) -> None:
+        """Create the window with an empty plot area."""
         super().__init__()
         self.filePath: Path | None                      = None
         self.ebsd:     EBSD | None                      = None
@@ -33,7 +33,93 @@ class EBSDGui(QMainWindow):
         self.resize(1280, 800)
         self._buildUi()
 
+
+    def setFile(self, filePath: str | Path) -> None:
+        """Select an input file while displaying only its filename in the UI.
+
+        Args:
+           filePath: path of the EBSD file
+        """
+        self.filePath = Path(filePath).expanduser().resolve()
+        self.fileName.setText(self.filePath.name)
+        self.fileName.setToolTip(str(self.filePath))
+
+
+    def chooseFile(self) -> None:
+        """Prompt for an EBSD file and create the selected plot."""
+        name, _ = QFileDialog.getOpenFileName(
+            self, 'Open EBSD file', '', 'EBSD files (*.ang *.osc *.txt *.crc)')
+        if name:
+            self.setFile(name)
+            self.createPlot()
+
+
+    def createPlot(self) -> None:
+        """Load the selected data and render the chosen plot style."""
+        try:
+            ebsd = self._loadEbsd()
+            self._applyFilters(ebsd)
+            self.overlays = []
+            plotType = self.plotType.currentText()
+            if plotType == 'CI map':
+                self.figure = ebsd.plot(ebsd.ci, show=False)
+            elif plotType == 'IPF map':
+                self.figure = ebsd.plotIPF(
+                    direction=self.subplotStyle.currentText(), show=False)
+            else:
+                self.figure = ebsd.plotPF(
+                    axis=[int(value) for value in self.subplotStyle.currentText().strip('[]').split(',')],
+                    show=False)
+            axis = self.figure.axes[0]
+            if plotType != 'Pole figure':
+                self.figure.subplots_adjust(left=0.0125, right=0.99,
+                                             bottom=0.0125, top=0.99)
+            if self.hideAxes.isChecked() and plotType != 'Pole figure':
+                axis.axis('off')
+            if self.scaleBar.isChecked() and plotType != 'Pole figure':
+                ebsd.addScaleBarOverlay(axis)
+            self._setFigure(self.figure)
+            self._refreshCode()
+            self._updateDetailVisibility()
+            self.statusBar().showMessage('Plot created')
+        except (OSError, ValueError, IndexError) as error:
+            QMessageBox.critical(self, 'Could not create plot', str(error))
+            self.statusBar().showMessage('Plot creation failed')
+
+
+    def addUnitCellOverlay(self, event: Any) -> None:
+        """Add a unit-cell overlay at a click in an IPF plot.
+
+        Args:
+           event: matplotlib mouse event
+        """
+        if (self.ebsd is None or self.canvas is None or self.plotType.currentText() != 'IPF map'
+                or event.inaxes is None or event.xdata is None or event.ydata is None):
+            return
+        scale = self.overlayScale.value()
+        self.ebsd.addUnitCellOverlay(event.inaxes, event.xdata, event.ydata, scale)
+        self.overlays.append((event.xdata, event.ydata, scale))
+        self.canvas.draw_idle()
+        self._refreshCode()
+        self._updateDetailVisibility()
+        self.statusBar().showMessage('Unit-cell overlay added')
+
+
+    def clearUnitCellOverlays(self) -> None:
+        """Recreate the plot without its unit-cell overlays."""
+        if self.figure is not None and self.overlays:
+            self.createPlot()
+
+
+    def copyPythonCode(self) -> None:
+        """Copy the generated, reproducible plotting code to the clipboard."""
+        if self.code.toPlainText():
+            QApplication.clipboard().setText(self.code.toPlainText())
+            self.statusBar().showMessage('Python code copied to clipboard')
+
+
     def _buildUi(self) -> None:
+        """Create the sidebar (file, plot style, code and plot-detail tabs) and the plot area."""
         central = QWidget(self)
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
@@ -121,9 +207,21 @@ class EBSDGui(QMainWindow):
         self.statusBar().showMessage('Ready')
         self._updateMainStyle()
 
+
     @staticmethod
     def _doubleSpin(value: float = 0.0, minimum: float = -1_000_000.0,
                      maximum: float = 1_000_000.0, step: float = 0.1) -> QDoubleSpinBox:
+        """Create a spin box for floating point values.
+
+        Args:
+           value: initial value
+           minimum: minimum value
+           maximum: maximum value
+           step: step size
+
+        Returns:
+           spin box
+        """
         spin = QDoubleSpinBox()
         spin.setRange(minimum, maximum)
         spin.setDecimals(4)
@@ -131,7 +229,9 @@ class EBSDGui(QMainWindow):
         spin.setValue(value)
         return spin
 
+
     def _updateMainStyle(self) -> None:
+        """Update the sub-style choices (IPF direction, pole axis) for the selected plot style."""
         plotType = self.plotType.currentText()
         choices = {'IPF map': ('IPF direction', ['ND', 'RD', 'TD']),
                    'Pole figure': ('Pole axis', ['[1, 0, 0]', '[1, 1, 0]', '[1, 1, 1]'])}
@@ -143,7 +243,9 @@ class EBSDGui(QMainWindow):
         self.subplotStyleLabel.setVisible(plotType != 'CI map')
         self._updateDetailVisibility()
 
+
     def _updateDetailVisibility(self) -> None:
+        """Show only the plot-detail rows relevant to the selected plot style and options."""
         isMap = self.plotType.currentText() in ('CI map', 'IPF map')
         isIpf = self.plotType.currentText() == 'IPF map'
         self.detailsForm.setRowVisible(self.ciThreshold, self.ciEnabled.isChecked())
@@ -154,21 +256,13 @@ class EBSDGui(QMainWindow):
         self.detailsForm.setRowVisible(self.hideAxes, isMap)
         self.clearOverlays.setVisible(isIpf and bool(self.overlays))
 
-    def setFile(self, filePath: str | Path) -> None:
-        """Select an input file while displaying only its filename in the UI."""
-        self.filePath = Path(filePath).expanduser().resolve()
-        self.fileName.setText(self.filePath.name)
-        self.fileName.setToolTip(str(self.filePath))
-
-    def chooseFile(self) -> None:
-        """Prompt for an EBSD file and create the selected plot."""
-        name, _ = QFileDialog.getOpenFileName(
-            self, 'Open EBSD file', '', 'EBSD files (*.ang *.osc *.txt *.crc)')
-        if name:
-            self.setFile(name)
-            self.createPlot()
 
     def _loadEbsd(self) -> EBSD:
+        """Load the selected file.
+
+        Returns:
+           loaded EBSD data
+        """
         if self.filePath is None or not self.filePath.is_file():
             raise ValueError('Choose an existing EBSD data file.')
         if self.filePath.suffix.lower() not in SUPPORTED_SUFFIXES:
@@ -176,7 +270,13 @@ class EBSDGui(QMainWindow):
         self.ebsd = EBSD(str(self.filePath))
         return self.ebsd
 
+
     def _applyFilters(self, ebsd: EBSD) -> None:
+        """Apply CI mask, preview and crop from the plot details.
+
+        Args:
+           ebsd: EBSD data to filter
+        """
         ebsd.maskReset()
         ebsd.setVMask(self.downsample.value())
         if self.ciEnabled.isChecked():
@@ -186,38 +286,13 @@ class EBSDGui(QMainWindow):
             ymin, ymax = self.cropY.values()
             ebsd.cropVMask(xmin, ymin, xmax, ymax)
 
-    def createPlot(self) -> None:
-        """Load the selected data and render the chosen plot style."""
-        try:
-            ebsd = self._loadEbsd()
-            self._applyFilters(ebsd)
-            self.overlays = []
-            plotType = self.plotType.currentText()
-            if plotType == 'CI map':
-                self.figure = ebsd.plot(ebsd.ci, show=False)
-            elif plotType == 'IPF map':
-                self.figure = ebsd.plotIPF(
-                    direction=self.subplotStyle.currentText(), show=False)
-            else:
-                self.figure = ebsd.plotPF(
-                    axis=self._selectedPoleAxis(), show=False)
-            axis = self.figure.axes[0]
-            if plotType != 'Pole figure':
-                self.figure.subplots_adjust(left=0.0125, right=0.99,
-                                             bottom=0.0125, top=0.99)
-            if self.hideAxes.isChecked() and plotType != 'Pole figure':
-                axis.axis('off')
-            if self.scaleBar.isChecked() and plotType != 'Pole figure':
-                ebsd.addScaleBarOverlay(axis)
-            self._setFigure(self.figure)
-            self._refreshCode()
-            self._updateDetailVisibility()
-            self.statusBar().showMessage('Plot created')
-        except (OSError, ValueError, IndexError) as error:
-            QMessageBox.critical(self, 'Could not create plot', str(error))
-            self.statusBar().showMessage('Plot creation failed')
 
     def _setFigure(self, figure: Any) -> None:
+        """Show a new figure with its toolbar instead of the previous one.
+
+        Args:
+           figure: matplotlib figure
+        """
         if self.canvas is not None:
             self.plotLayout.removeWidget(self.canvas)
             self.canvas.setParent(None)
@@ -234,29 +309,9 @@ class EBSDGui(QMainWindow):
         self.plotLayout.addWidget(self.toolbar)
         self.plotLayout.addWidget(self.canvas)
 
-    def addUnitCellOverlay(self, event: Any) -> None:
-        """Add a unit-cell overlay at a click in an IPF plot."""
-        if (self.ebsd is None or self.canvas is None or self.plotType.currentText() != 'IPF map'
-                or event.inaxes is None or event.xdata is None or event.ydata is None):
-            return
-        scale = self.overlayScale.value()
-        self.ebsd.addUnitCellOverlay(event.inaxes, event.xdata, event.ydata, scale)
-        self.overlays.append((event.xdata, event.ydata, scale))
-        self.canvas.draw_idle()
-        self._refreshCode()
-        self._updateDetailVisibility()
-        self.statusBar().showMessage('Unit-cell overlay added')
-
-    def clearUnitCellOverlays(self) -> None:
-        """Recreate the plot without its unit-cell overlays."""
-        if self.figure is not None and self.overlays:
-            self.createPlot()
-
-    def _selectedPoleAxis(self) -> list[int]:
-        return [int(value.strip()) for value in
-                self.subplotStyle.currentText().strip('[]').split(',')]
 
     def _refreshCode(self) -> None:
+        """Write Python code that reproduces the current plot into the code tab."""
         if self.ebsd is None:
             return
         lines = ['from ebsdlab import EBSD', 'import matplotlib.pyplot as plt', '',
@@ -280,7 +335,7 @@ class EBSDGui(QMainWindow):
                     f'emap.addUnitCellOverlay(fig.axes[0], {x:.6g}, {y:.6g}, scale={scale:.6g})'
                 )
         else:
-            lines.append(f'fig = emap.plotPF(axis={self._selectedPoleAxis()}, show=False)')
+            lines.append(f'fig = emap.plotPF(axis={self.subplotStyle.currentText()}, show=False)')
         if plotType != 'Pole figure':
             lines.append('fig.subplots_adjust(left=0.0125, right=0.99, bottom=0.0125, top=0.99)')
         if self.scaleBar.isChecked() and plotType != 'Pole figure':
@@ -290,15 +345,13 @@ class EBSDGui(QMainWindow):
         lines.extend(['plt.show()', ''])
         self.code.setPlainText('\n'.join(lines))
 
-    def copyPythonCode(self) -> None:
-        """Copy the generated, reproducible plotting code to the clipboard."""
-        if self.code.toPlainText():
-            QApplication.clipboard().setText(self.code.toPlainText())
-            self.statusBar().showMessage('Python code copied to clipboard')
-
 
 def main() -> int:
-    """Start the optional PySide6 GUI."""
+    """Start the optional PySide6 GUI.
+
+    Returns:
+       exit code of the application
+    """
     app = QApplication.instance() or QApplication([])
     window = EBSDGui()
     window.show()

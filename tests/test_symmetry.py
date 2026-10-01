@@ -3,6 +3,7 @@
 
 import numpy as np
 import pytest
+from scipy.spatial.transform import Rotation
 from ebsdlab.symmetry import GROUPS, Symmetry
 
 
@@ -165,7 +166,7 @@ def test_low_symmetry_standard_stereographic_regions_and_fundamental_zone():
     # A 170 degree C2 rotation is equivalent to a 10 degree rotation, so it
     # is outside the Voronoi fundamental zone of identity.
     assert not Symmetry('monoclinic').inFZ(
-        np.array([0.0, np.tan(np.deg2rad(85.0)), 0.0])
+        Rotation.from_rotvec([0.0, np.deg2rad(170.0), 0.0])
     )
 
 
