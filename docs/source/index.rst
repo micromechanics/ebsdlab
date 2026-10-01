@@ -6,7 +6,7 @@ Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in s
 Features
 --------
 
-- File formats accepted .ang | .osc | .crc | .txt
+- File formats accepted .ang | .osc | .crc | .ctf | .txt
 - can write .ang for FCC. Others could be added
 - fast plotting: maps are drawn directly from the scan grid; virtual mask (only used for plotting)
    - increases speed in intermediate test plots

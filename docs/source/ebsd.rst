@@ -33,7 +33,7 @@ Example: Read EBSD data and plot the ND IPF
 
 Let's looking at inverse pole figure (IPF) in normal direction (ND) and pole-figure (PF) in the [1,0,0] direction.
 
-- Read EBSD data from a file (e.g., .ang, .osc, .crc, or .txt).
+- Read EBSD data from a file (e.g., .ang, .osc, .crc, .ctf, or .txt).
 - Plot confidence index (CI). Mask out all points with a CI less than 0.1. Initially all points are present in the mask, i.e. they are shown. By masking out points, these are removed from the mask.
 - Plot inverse pole figure in normal direction
 - Play with different options (e.g. 1024 pixel to see speed of plotting)

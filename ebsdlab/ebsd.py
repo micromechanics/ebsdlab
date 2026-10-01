@@ -19,11 +19,13 @@ from ._rotation import asBungeEulers
 from .orientation import Orientation
 from .symmetry import Symmetry
 
-SUPPORTED_SUFFIXES = {'.ang', '.osc', '.txt', '.crc'}
-TSL_SYMMETRIES = {43: 'cubic', 62: 'hexagonal', 42: 'tetragonal', 22: 'orthorhombic', 32: 'trigonal',
-                  2: 'monoclinic', 1: 'triclinic', 'm-3m': 'cubic'}
-OXFORD_LAUE_GROUPS = {11: 'cubic', 9: 'hexagonal', 5: 'tetragonal', 3: 'orthorhombic', 7: 'trigonal',
-                      2: 'monoclinic', 1: 'triclinic'}
+SUPPORTED_SUFFIXES = {'.ang', '.osc', '.txt', '.crc', '.ctf'}
+# The low Laue classes m-3, 6/m, 4/m, -3 use the high ones m-3m, 6/mmm, 4/mmm, -3m of their crystal system,
+#    which merges some distinct orientations; add separate lattices if such phases matter
+TSL_SYMMETRIES = {43: 'cubic', 23: 'cubic', 62: 'hexagonal', 6: 'hexagonal', 42: 'tetragonal', 4: 'tetragonal',
+                  22: 'orthorhombic', 32: 'trigonal', 3: 'trigonal', 2: 'monoclinic', 1: 'triclinic', 'm-3m': 'cubic'}
+OXFORD_LAUE_GROUPS = {11: 'cubic', 10: 'cubic', 9: 'hexagonal', 8: 'hexagonal', 5: 'tetragonal', 4: 'tetragonal',
+                      3: 'orthorhombic', 7: 'trigonal', 6: 'trigonal', 2: 'monoclinic', 1: 'triclinic'}
 
 
 class EBSD:
@@ -85,6 +87,8 @@ class EBSD:
             self.loadTXT()
         elif suffix == '.crc':
             self.loadCRC()
+        elif suffix == '.ctf':
+            self.loadCTF()
         elif self.fileName.startswith('void'):
             print('Void mode', self.fileName[4:])
             self.loadVoid(self.fileName[4:])
@@ -511,10 +515,14 @@ class EBSD:
                 'WorkingDistance', 'SEMVoltage', 'GRID:', 'Symmetry']
         fileHandle = open(self.fileName)
         keyValues: list[Any] = [''] * len(keys)  # actual values
-        symmetries = []
+        symmetries: dict[int, Any] = {}  # phase number: TSL symmetry code
+        phase = 0
         for line in fileHandle:
             if line[0:10] == '# OPERATOR':
                 break
+            parts = line.split()
+            if parts[:2] == ['#', 'Phase'] and len(parts) == 3:  # phases may be listed in any order
+                phase = int(parts[2])
             for key in keys:
                 searchTerm = '# '+key
                 if searchTerm == line[0:len(searchTerm)]:
@@ -528,10 +536,11 @@ class EBSD:
                             pass
                     keyValues[index] = value
                     if key == 'Symmetry':
-                        symmetries.append(value)
+                        symmetries[phase or len(symmetries)+1] = value
                     break
         self.meta = dict(list(zip(keys, keyValues)))
-        self.sym = [Symmetry(TSL_SYMMETRIES.get(i, '')) for i in symmetries]
+        self.sym = [Symmetry(TSL_SYMMETRIES.get(symmetries.get(i, ''), ''))
+                    for i in range(1, max(symmetries, default=0)+1)]
         # read data: print "Reading file, this can take a bit..."
         data = np.loadtxt(fileHandle)
         self.phi1 = data[:, 0].astype(float)
@@ -685,28 +694,28 @@ class EBSD:
         if startPosition < 0:
             raise ValueError('OSC data-block marker was not found.')
 
-        dataOffset = startPosition + len(startBytes)
-        dataSize = n * 10 * np.dtype('<f4').itemsize
-        remaining = len(raw) - dataOffset
-        if remaining == dataSize + 8:
-            # Current format: x and y step sizes directly precede the records.
-            pass
-        elif remaining == dataSize + 12:
-            # Older format: a uint32 record-size/count field precedes them.
-            dataOffset += 4
+        # OSC versions differ: a uint32 count field may precede the x and y step sizes, records have 10 or more
+        # columns (e.g. PRIAS or EDS), and other blocks may follow. As in mtex, the layout is found where the
+        # second record lies one step along x: x = stepSizeX, y = 0.
+        base = startPosition + len(startBytes)
+        for dataOffset, nColumns in ((offset, columns) for offset in (base, base+4) for columns in range(10, 31)):
+            if dataOffset + 8 + n*nColumns*4 > len(raw):
+                continue
+            stepX, stepY = np.frombuffer(raw, dtype='<f4', count=2, offset=dataOffset).astype(float)
+            second = np.frombuffer(raw, dtype='<f4', count=5, offset=dataOffset + 8 + nColumns*4)
+            if stepX > 1e-6 and np.isclose(second[3], stepX, rtol=1e-4) and second[4] == 0:
+                break
         else:
-            raise ValueError(
-                f'Unexpected OSC data-block size: expected {dataSize + 8} or '
-                f'{dataSize + 12} bytes after the marker, found {remaining}.')
-
-        self.stepSizeX, self.stepSizeY = np.frombuffer(
-            raw, dtype='<f4', count=2, offset=dataOffset).astype(float)
-        data = np.frombuffer(raw, dtype='<f4', count=n*10,
-                             offset=dataOffset + 8).reshape(n, 10)
+            raise ValueError('OSC data layout was not recognized.')
+        self.stepSizeX, self.stepSizeY = stepX, stepY
+        data = np.frombuffer(raw, dtype='<f4', count=n*nColumns,
+                             offset=dataOffset + 8).reshape(n, nColumns)
         self.phi1 = data[:, 0].astype(np.float16)
         self.phi = data[:, 1].astype(np.float16)
         self.phi2 = data[:, 2].astype(np.float16)
-        self.iq = data[:, 5].astype(np.float16)
+        iqScale = 10.0**max(0, math.ceil(math.log10(max(float(data[:, 5].max()), 1.0)/float(np.finfo(np.float16).max))))
+        if iqScale > 1:
+            self.iq = (data[:, 5]/iqScale).astype(np.float16)
         self.ci = data[:, 6].astype(np.float16)
         self.phaseID = data[:, 7].astype(np.uint8)
         self.phaseID += not self.phaseID.any()  # single-phase EDAX files use 0
@@ -738,6 +747,8 @@ class EBSD:
         cprData: dict[str, dict[str, Any]] = {}
         for line in cprFile:
             line = line.strip()
+            if not line:
+                continue
             if line[0] == '[':
                 title = line[1:-1].lower()
                 cprData[title] = {}
@@ -749,6 +760,8 @@ class EBSD:
                 cprData[title][key.lower()] = value.lower()
         cprFile.close()
         # print "META DATA",cprData
+        if 'griddistx' not in cprData['job']:
+            raise ValueError(f'CRC file is not a grid map (JobMode={cprData["general"].get("jobmode")})')
         self.stepSizeX = np.double(cprData['job']['griddistx'])
         self.stepSizeY = np.double(cprData['job']['griddisty'])
         xcells = int(cprData['job']['xcells'])
@@ -812,6 +825,7 @@ class EBSD:
                       ('bc', 'u1'), ('bs', 'u1'), ('bands', 'u1'), ('error', 'u1')]
         if 'ReliabilityIndex' in columnNames:
             recordType.append(('ri', '<f4'))
+        recordType += [(name, '<f4') for name in columnNames if name.startswith('Unknown') and name != 'Unknown']
         data = np.fromfile(self.fileName, dtype=recordType, count=numDataPoints)
         self.phaseID = data['phase'].copy()
         self.bc, self.bs, self.bands, self.error = (data[i].copy() for i in ('bc', 'bs', 'bands', 'error'))
@@ -820,6 +834,52 @@ class EBSD:
         self.iq, self.semSignal, self.fit = (np.zeros(numDataPoints) for _ in range(3))
         if np.max(self.phaseID) > len(self.sym):
             print('ERRRO in reading CRC: symmetries do not match', len(self.sym), np.max(self.phaseID))
+        return
+
+
+    def loadCTF(self, fileName: str = '') -> None:
+        """
+        Load Oxford .ctf text file; filename saved in self
+
+        Args:
+           fileName: file to read [default: self.fileName]
+        """
+        if fileName:
+            self.fileName = fileName
+        print('Load .ctf file: ', self.fileName)
+        # some AZtec versions write decimal commas; ',' is no field separator in .ctf
+        with open(self.fileName, encoding='utf-8-sig', errors='replace') as fileHandle:
+            lines = fileHandle.read().replace(',', '.').splitlines()
+        header: dict[str, str] = {}
+        for iLine, line in enumerate(lines):
+            parts = line.split('\t')
+            if parts[0] == 'Phases':
+                self.sym = [Symmetry(OXFORD_LAUE_GROUPS.get(int(phaseLine.split('\t')[3]), ''))
+                            for phaseLine in lines[iLine+1:iLine+1+int(parts[1])]]
+            elif parts[0] == 'Phase':  # column names, data follows
+                break
+            elif len(parts) > 1:
+                header[parts[0]] = parts[1]
+        if header.get('JobMode') != 'Grid':
+            raise ValueError(f'CTF file is not a grid map (JobMode={header.get("JobMode")}); '
+                             'only grid maps are supported.')
+        self.stepSizeX, self.stepSizeY = float(header['XStep']), float(header['YStep'])
+        xcells, ycells = int(header['XCells']), int(header['YCells'])
+        data = np.loadtxt(lines[iLine+1:], ndmin=2)
+        if len(data) != xcells*ycells:
+            raise ValueError(f'CTF file has {len(data)} points, but XCells*YCells = {xcells*ycells}.')
+        self.width, self.height = xcells*self.stepSizeX, ycells*self.stepSizeY
+        self.ratio = self.width/self.height
+        # coordinates from the header: the X and Y columns are rounded
+        x, y = np.meshgrid(np.arange(xcells)*self.stepSizeX, np.arange(ycells)*self.stepSizeY)
+        self._setGrid(x.flatten(), y.flatten())
+        # columns: Phase X Y Bands Error Euler1 Euler2 Euler3 MAD BC BS
+        self.phaseID = data[:, 0].astype(np.uint8)
+        self.bands, self.error = data[:, 3].astype(np.uint8), data[:, 4].astype(np.uint8)
+        self.phi1, self.phi, self.phi2 = np.radians(data[:, 5:8]).T
+        self.ci = data[:, 8]
+        self.bc, self.bs = data[:, 9].astype(np.uint8), data[:, 10].astype(np.uint8)
+        self.ri, self.iq, self.semSignal, self.fit = (np.zeros(len(data)) for _ in range(4))
         return
 
 

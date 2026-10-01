@@ -158,6 +158,14 @@ Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebs
 - Implicit grid coordinates: done (storage, loaders, `xy()`, neighbors, KAM, map plotting). Open:
   - Unordered or partial `.txt` exports now raise; sort them or keep explicit `x`, `y` if needed.
 
+- `.crc`, `.ctf`: only grid maps are read; `JobMode=Operator` or `Interactive` files (single points, e.g. other
+  Zenodo 7837199 maps, MTEX `eclogite.ctf`) raise `ValueError`.
+- `.crc`, `.ctf`, `.ang`: the low Laue classes m-3, 6/m, 4/m, -3 are treated as m-3m, 6/mmm, 4/mmm, -3m.
+- `.ctf`: Euler angles are used as stored, like `.crc`; no Oxford-to-EDAX reference-frame conversion.
+- `.osc`: IQ is kept as `float16`; if it exceeds 65504 (MTEX `copper.osc`), it is divided by a power of 10 and the
+  loader prints the factor. `writeANG` then writes the scaled IQ.
+
+
 ## FAQ
 ### What features I do not envision:
   - include all crystal symmetries (materials science can mostly live with few)
