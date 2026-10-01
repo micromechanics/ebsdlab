@@ -14,7 +14,7 @@ from scipy.spatial.transform import Rotation
 from . import fileIO
 from ._rotation import asBungeEulers
 from .orientation import Orientation
-from .symmetry import Symmetry
+from .symmetry import Symmetry, showOrSave
 
 
 class EBSD:
@@ -188,11 +188,7 @@ class EBSD:
             rgbs[:, points] = rgbsPhase
         fig = self.plotRGB(rgbs, widthPixel, interpolationType)
         print('Duration plotIPF: ', int(np.round(time.time()-startTime)), 'sec')
-        if not fileName and show:
-            plt.show()
-        elif fileName:
-            plt.savefig(fileName, dpi=150, bbox_inches='tight')
-            plt.close()
+        showOrSave(fileName, show)
         return fig
 
 
@@ -240,11 +236,7 @@ class EBSD:
         self.image = np.asarray(canvas.buffer_rgba())[..., :3].copy()
         plt.close(fig)
         plt.imshow(self.image, extent=self.imageExtent, origin='upper')
-        if not fileName:
-            plt.show()
-        else:
-            plt.savefig(fileName, dpi=150, bbox_inches='tight')
-            plt.close()
+        showOrSave(fileName)
         return
 
 
@@ -269,25 +261,9 @@ class EBSD:
         iQuaternion = self.quaternions[iClose]
         sym = self.sym[self.phaseID[iClose]]
         if sym.lattice:
-            for line in sym.unitCell():
-                start = iQuaternion.apply(np.array(line[:3], dtype=float)*scale)
-                end   = iQuaternion.apply(np.array(line[3:], dtype=float)*scale)
+            for start, end, lw in sym.unitCellSegments(iQuaternion, scale):
                 # OIM coordinate system and ``imshow(origin='upper')``.
-                start = np.array([-start[1], -start[0], start[2]])
-                end   = np.array([-end[1], -end[0], end[2]])
-                if start[2] < 0 and end[2] < 0:
-                    segments = [(start, end, 0.2)]
-                elif start[2] > 0 and end[2] > 0:
-                    segments = [(start, end, 2)]
-                else:
-                    delta = end-start
-                    mid = start+(-start[2]/delta[2])*delta
-                    if start[2] > 0:
-                        segments = [(start, mid, 2), (mid, end, 0.2)]
-                    else:
-                        segments = [(start, mid, 0.2), (mid, end, 2)]
-                for first, last, lw in segments:
-                    ax.plot([first[0]+x, last[0]+x], [first[1]+y, last[1]+y], color=colorCube, lw=lw)
+                ax.plot([x-start[1], x-end[1]], [y-start[0], y-end[0]], color=colorCube, lw=lw)
         return int(iClose)
 
 
@@ -312,11 +288,7 @@ class EBSD:
         scaleBar = self.addScaleBarOverlay(ax, barLength, sites.get(site, 'lower left'))
         scaleBar.patch.set_alpha(alpha)
         ax.axis('off')
-        if not fileName:
-            plt.show()
-        else:
-            plt.savefig(fileName, dpi=150, bbox_inches='tight')
-            plt.close()
+        showOrSave(fileName)
         return fig
 
 
@@ -444,12 +416,7 @@ class EBSD:
         ax.set_yticks([])
         ax.axis('off')
         print('Duration plotPF: ', int(np.round(time.time()-startTime)), 'sec')
-        if not fileName and show:
-            plt.show()
-        elif fileName:
-            plt.savefig(fileName, dpi=150, bbox_inches='tight')
-            plt.clf()
-            plt.cla()
+        showOrSave(fileName, show)
         return fig
 
     # @}

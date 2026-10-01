@@ -235,10 +235,7 @@ class Symmetry:
         ax.text(0.37, 0.37, '[111]')
         ax.axis('off')
         ax.axis('equal')
-        if fileName:
-            plt.savefig(fileName)
-        if show:
-            plt.show()
+        showOrSave(fileName, show)
         return fig
 
 
@@ -310,9 +307,35 @@ class Symmetry:
             raise ValueError('trigonal requires alpha = beta = gamma')
         if cellConfig['geometry'] == 'hexagonal':
             return _hexagonalCell(a, c)
-        if cellConfig['geometry'] in {'monoclinic', 'triclinic', 'rhombohedral'}:
-            return _parallelepipedCell(a, b, c, *angles)
-        return _orthogonalCell(a, b, c)
+        return _parallelepipedCell(a, b, c, *angles)
+
+
+    def unitCellSegments(self, rotation: Rotation, scale: float = 1.) -> list[tuple[np.ndarray, np.ndarray, float]]:
+        """Return the rotated unit-cell edges, split where they cross z=0.
+
+        Args:
+           rotation: orientation of the unit cell
+           scale: scale of the unit cell
+
+        Returns:
+           segments as (start, end, line width): 2 above z=0, 0.2 below
+        """
+        segments = []
+        for line in self.unitCell():
+            start = rotation.apply(np.array(line[:3], dtype=float)*scale)
+            end   = rotation.apply(np.array(line[3:], dtype=float)*scale)
+            if start[2] < 0 and end[2] < 0:
+                segments.append((start, end, 0.2))
+            elif start[2] > 0 and end[2] > 0:
+                segments.append((start, end, 2))
+            else:
+                delta = end-start
+                mid = start+(-start[2]/delta[2])*delta
+                if start[2] > 0:
+                    segments += [(start, mid, 2), (mid, end, 0.2)]
+                else:
+                    segments += [(start, mid, 0.2), (mid, end, 2)]
+        return segments
 
 
     def equivalentQuaternions(self, quaternion: Rotation, who: Any = None) -> list[Rotation]:
@@ -529,24 +552,6 @@ class Symmetry:
         return self.lattice == other.lattice
 
 
-def _orthogonalCell(a: float, b: float, c: float) -> np.ndarray:
-    """Return the twelve centered edges of an orthogonal unit cell.
-
-    Args:
-       a: lattice constant a
-       b: lattice constant b
-       c: lattice constant c
-
-    Returns:
-       edges (12, 6)
-    """
-    vertices = np.array([[-a, -b, -c], [-a, -b, c], [-a, b, -c], [-a, b, c],
-                         [a, -b, -c], [a, -b, c], [a, b, -c], [a, b, c]]) / 2.0
-    connections = ((0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
-                   (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7))
-    return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
-
-
 def _hexagonalCell(a: float, c: float) -> np.ndarray:
     """Return the eighteen centered edges of a regular hexagonal prism.
 
@@ -598,3 +603,18 @@ def _parallelepipedCell(a: float, b: float, c: float, alpha: float, beta: float,
     connections = ((0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
                    (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7))
     return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
+
+
+def showOrSave(fileName: str = '', show: bool = True) -> None:
+    """Save the current figure to a file, or else show it.
+
+    Args:
+       fileName: if given, save to this file and close the figure
+       show: show the figure if no fileName is given
+    """
+    if fileName:
+        plt.savefig(fileName, dpi=150, bbox_inches='tight')
+        plt.close()
+    elif show:
+        plt.show()
+

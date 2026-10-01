@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 from scipy.spatial.transform import Rotation
 from ._rotation import asBungeEulers
-from .symmetry import Symmetry
+from .symmetry import Symmetry, showOrSave
 
 
 class Orientation:
@@ -73,24 +73,8 @@ class Orientation:
             fig, ax = plt.subplots()
 
         if unitCell:
-            for line in self.symmetry.unitCell():
-                start, end = np.array(line[:3], dtype=float), np.array(line[3:], dtype=float)
-                start = self.quaternion.apply(start)
-                end   = self.quaternion.apply(end)
-                if start[2] < 0 and end[2] < 0:
-                    self.plotLine(ax, start, end-start, color='b', lw=0.2)
-                elif start[2] > 0 and end[2] > 0:
-                    self.plotLine(ax, start, end-start, color='b', lw=2)
-                else:
-                    delta = end-start
-                    k = -start[2]/delta[2]
-                    mid = start+k*delta
-                    if start[2] > 0:
-                        self.plotLine(ax, start, mid-start, color='b', lw=2)
-                        self.plotLine(ax, mid,   end-mid, color='b', lw=0.2)
-                    else:
-                        self.plotLine(ax, start, mid-start, color='b', lw=0.2)
-                        self.plotLine(ax, mid,   end-mid, color='b', lw=2)
+            for start, end, lw in self.symmetry.unitCellSegments(self.quaternion):
+                self.plotLine(ax, start, end-start, color='b', lw=lw)
         if cos:
             self.plotUnit(ax, 'RD [100]', 'TD [010]', 'ND [001]')
         if poles is not None:
@@ -138,10 +122,7 @@ class Orientation:
         if self.plot2D == '3D':
             ax.set_zlabel('')
             ax.set_zticks([])
-        if fileName:
-            plt.savefig(fileName, dpi=150, bbox_inches='tight')
-        else:
-            plt.show()
+        showOrSave(fileName)
         return
 
 
@@ -403,14 +384,7 @@ class Orientation:
         Returns:
            vector of color (rgb)
         """
-        color = np.zeros(3, 'd')
-        for q in self.symmetry.equivalentQuaternions(self.quaternion):
-            # align crystal direction to axis
-            pole = q.inv().apply(axis)
-            inSST, color = self.symmetry.inSST(pole, color=True, proper=proper)
-            if inSST:
-                break
-        return color
+        return self.symmetry.inSST(self.inversePole(axis, proper)[0], color=True, proper=proper)[1]
 
 
     @classmethod
