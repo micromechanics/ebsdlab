@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import os
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 import numpy as np
 from ._rotation import asBungeEulers

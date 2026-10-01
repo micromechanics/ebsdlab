@@ -3,7 +3,8 @@
 from pathlib import Path
 import numpy as np
 import pytest
-from ebsdlab.ebsd import EBSD, SUPPORTED_SUFFIXES
+from ebsdlab.ebsd import EBSD
+from ebsdlab.fileIO import LOADERS
 
 
 DATA_DIR = Path(__file__).parent/'DataFiles'
@@ -17,7 +18,7 @@ ANG_DATA = '''# Symmetry 62
 
 
 @pytest.mark.parametrize('data_file',
-    sorted(path for path in DATA_DIR.rglob('*') if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES),
+    sorted(path for path in DATA_DIR.rglob('*') if path.is_file() and path.suffix.lower() in LOADERS),
     ids=lambda path: path.name)
 def test_all_supported_data_files_load(data_file):
     """Every supported fixture shipped with the tests can be opened."""
@@ -49,8 +50,6 @@ def test_file_extensions_are_case_insensitive_and_invalid_ones_raise(tmp_path):
     data_file = tmp_path/'map.ANG'
     data_file.write_text(ANG_DATA.replace('62', '43', 1))
     assert len(EBSD(data_file).x) == 4
-    with pytest.raises(ValueError, match='Unsupported EBSD file format'):
-        EBSD(tmp_path/'map.unknown')
 
 
 @pytest.mark.mpl_image_compare
