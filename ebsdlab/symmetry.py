@@ -10,7 +10,7 @@ from scipy.spatial.transform import Rotation
 
 from ._rotation import asRodrigues
 
-# Directions on an SST edge give components of ~1e-17 instead of exactly 0; count them as inside
+# Directions on an SST edge might give components of -1e-15 instead of exactly 0; count them as inside
 SST_TOLERANCE = 1e-12
 
 # Standard stereographic triangle (SST): smallest region representing
@@ -161,8 +161,7 @@ GROUPS: dict[str, dict[str, Any]] = {
     },
 }
 
-# Rhombohedral is the lattice name customarily used for the trigonal crystal
-# system.  Keep one canonical registry entry so both names behave identically.
+# Rhombohedral is the lattice name customarily used for the trigonal crystal system.
 LATTICE_ALIASES = {'rhombohedral': 'trigonal'}
 
 
@@ -202,10 +201,8 @@ class Symmetry:
         xTemp = []
         yTemp = []
         for a in range(16):
-            borderPoints.append([
-                math.cos(a/180.0*math.pi)*math.sqrt(2.0) - 1,
-                math.sin(a/180.0*math.pi)*math.sqrt(2.0),
-            ])
+            borderPoints.append([math.cos(a/180.0*math.pi)*math.sqrt(2.0) - 1,
+                                 math.sin(a/180.0*math.pi)*math.sqrt(2.0)])
             xTemp.append(math.cos(a/180.0*math.pi)*math.sqrt(2.0)-1)
             yTemp.append(math.sin(a/180.0*math.pi)*math.sqrt(2))
         borderPoints.append([0.0, 0.0])
@@ -230,11 +227,10 @@ class Symmetry:
             colors.append(string)
         # plotting: background, border, labels
         fig, ax = plt.subplots()
-        ax.scatter(xy[:, 0], xy[:, 1], c=colors, s=15000. *
-                   stepSize, linewidths=0)  # , alpha=0.05)
-        ax.plot(border[:, 0], border[:, 1], '-k', linewidth=3)  # , alpha=0.5)
+        ax.scatter(xy[:, 0], xy[:, 1], c=colors, s=15000. *stepSize, linewidths=0)
+        ax.plot(border[:, 0], border[:, 1], '-k', linewidth=3)
         plt.rcParams['font.size'] = 18.
-        ax.text(0, 0, '[100]', horizontalalignment='right')  # , zorder=40
+        ax.text(0, 0, '[100]', horizontalalignment='right')
         ax.text(0.42, 0, '[110]')
         ax.text(0.37, 0.37, '[111]')
         ax.axis('off')
@@ -257,11 +253,10 @@ class Symmetry:
         """
         # Generate all symmetry-equivalent rotation operations
         config = GROUPS.get(self.lattice)
-        operations = (Rotation.create_group(
-            config['rotation_group'], axis=config.get('rotation_axis', 'Z')
-        ) if config is not None else Rotation.identity(1))
+        operations = (Rotation.create_group(config['rotation_group'], axis=config.get('rotation_axis', 'Z'))
+                      if config is not None else Rotation.identity(1))
         # SciPy's cubic group does not start with identity, but callers rely on
-        # operations[0] being the rotation that leaves vectors unchanged.
+        #    operations[0] being the rotation that leaves vectors unchanged.
         identity = int(np.argmin(operations.magnitude()))
         if identity != 0:
             order = np.concatenate(([identity], np.delete(np.arange(len(operations)), identity)))
@@ -272,13 +267,10 @@ class Symmetry:
         return operations
 
 
-    def unitCell(self, *, a: float = 1.0, b: float | None = None,
-                 c: float | None = None, alpha: float | None = None,
-                 beta: float | None = None, gamma: float | None = None) -> np.ndarray | list[list[None]]:
+    def unitCell(self, *, a: float = 1.0, b: float | None = None, c: float | None = None,
+                 alpha: float | None = None, beta: float | None = None, gamma: float | None = None
+                 ) -> np.ndarray | list[list[None]]:
         """Return centered unit-cell edges as ``[x1, y1, z1, x2, y2, z2]``.
-
-        The defaults are illustrative proportions for plotting. Supply positive
-        lattice constants for a material-specific cell.
 
         Args:
            a: lattice constant a
@@ -294,7 +286,6 @@ class Symmetry:
         if self.lattice not in GROUPS:
             print('Unit cell not implemented')
             return [[None]]
-
         cellConfig = GROUPS[self.lattice]['cell']
         _, defaultB, defaultC = cellConfig['default_ratio']
         b = a * defaultB if b is None else b
@@ -307,10 +298,8 @@ class Symmetry:
             if not np.isclose(a, axisValues[axis]):
                 raise ValueError(f'{self.lattice} requires a = {axis}')
         defaultAngles = cellConfig.get('default_angles', (90.0, 90.0, 90.0))
-        angles = np.asarray(tuple(
-            default if value is None else value
-            for value, default in zip((alpha, beta, gamma), defaultAngles)
-        ), dtype=float)
+        angles = np.asarray(tuple(default if value is None else value
+                                  for value, default in zip((alpha, beta, gamma), defaultAngles)), dtype=float)
         if not np.all(np.isfinite(angles)) or np.any((angles <= 0.0) | (angles >= 180.0)):
             raise ValueError('lattice angles must be finite and between 0 and 180 degrees')
         for angle, required, name in zip(angles, cellConfig.get('fixed_angles', (None,) * 3),
@@ -353,10 +342,8 @@ class Symmetry:
         rodrigues = abs(rawRodrigues)
         if self.lattice == 'cubic':
             limit = math.sqrt(2.0) - 1.0
-            return bool(
-                limit >= rodrigues[0] and limit >= rodrigues[1] and limit >= rodrigues[2]
-                and 1.0 >= rodrigues[0] + rodrigues[1] + rodrigues[2]
-            )
+            return bool(limit >= rodrigues[0] and limit >= rodrigues[1] and limit >= rodrigues[2]
+                        and 1.0 >= rodrigues[0] + rodrigues[1] + rodrigues[2])
         if self.lattice == 'hexagonal':
             return bool(
                 1.0 >= rodrigues[0] and 1.0 >= rodrigues[1] and 1.0 >= rodrigues[2]
@@ -376,9 +363,8 @@ class Symmetry:
             # The Voronoi region of identity is the fundamental zone for
             # these lower-symmetry proper rotation groups.
             magnitude = np.linalg.norm(rawRodrigues)
-            rotation = (Rotation.from_rotvec(
-                2.0 * math.atan(magnitude) * rawRodrigues / magnitude
-            ) if magnitude else Rotation.identity())
+            rotation = (Rotation.from_rotvec(2.0 * math.atan(magnitude) * rawRodrigues / magnitude)
+                        if magnitude else Rotation.identity())
             magnitudes = (rotation * self.symmetryQuats()).magnitude()
             return bool(magnitudes[0] <= np.min(magnitudes) + 1e-12)
         return True
@@ -468,9 +454,7 @@ class Symmetry:
         # have to return color array
         if color:
             if np.any(inSST):
-                theComponentsNorm = (
-                    theComponents / np.linalg.norm(theComponents, axis=0)
-                )
+                theComponentsNorm = (theComponents / np.linalg.norm(theComponents, axis=0))
                 # smoothen color ramps
                 rgb = np.power(np.abs(theComponentsNorm), 0.5)
                 if rgb.ndim > 1:
@@ -556,14 +540,10 @@ def _orthogonalCell(a: float, b: float, c: float) -> np.ndarray:
     Returns:
        edges (12, 6)
     """
-    vertices = np.array([
-        [-a, -b, -c], [-a, -b, c], [-a, b, -c], [-a, b, c],
-        [a, -b, -c], [a, -b, c], [a, b, -c], [a, b, c],
-    ]) / 2.0
-    connections = (
-        (0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
-        (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7),
-    )
+    vertices = np.array([[-a, -b, -c], [-a, -b, c], [-a, b, -c], [-a, b, c],
+                         [a, -b, -c], [a, -b, c], [a, b, -c], [a, b, c]]) / 2.0
+    connections = ((0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
+                   (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7))
     return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
 
 
@@ -582,16 +562,13 @@ def _hexagonalCell(a: float, c: float) -> np.ndarray:
     lower = np.column_stack((basal, np.full(6, -c / 2.0)))
     upper = np.column_stack((basal, np.full(6, c / 2.0)))
     vertices = np.vstack((lower, upper))
-    connections = (
-        [(index, (index + 1) % 6) for index in range(6)]
-        + [(index + 6, (index + 1) % 6 + 6) for index in range(6)]
-        + [(index, index + 6) for index in range(6)]
-    )
+    connections = ([(index, (index + 1) % 6) for index in range(6)] +
+                   [(index + 6, (index + 1) % 6 + 6) for index in range(6)] +
+                   [(index, index + 6) for index in range(6)])
     return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])
 
 
-def _parallelepipedCell(a: float, b: float, c: float,
-                         alpha: float, beta: float, gamma: float) -> np.ndarray:
+def _parallelepipedCell(a: float, b: float, c: float, alpha: float, beta: float, gamma: float) -> np.ndarray:
     """Return centered edges of a cell defined by lengths and angles in degrees.
 
     Args:
@@ -615,12 +592,9 @@ def _parallelepipedCell(a: float, b: float, c: float,
     vectors = np.array([
         [a, 0.0, 0.0],
         [b * cosGamma, b * sinGamma, 0.0],
-        [c * cosBeta, cY, np.sqrt(cZSquared)],
-    ])
-    vertices = np.array([
-        (sx * vectors[0] + sy * vectors[1] + sz * vectors[2]) / 2.0
-        for sx in (-1.0, 1.0) for sy in (-1.0, 1.0) for sz in (-1.0, 1.0)
-    ])
+        [c * cosBeta, cY, np.sqrt(cZSquared)]])
+    vertices = np.array([(sx * vectors[0] + sy * vectors[1] + sz * vectors[2]) / 2.0
+                         for sx in (-1.0, 1.0) for sy in (-1.0, 1.0) for sz in (-1.0, 1.0)])
     connections = ((0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
                    (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7))
     return np.array([np.concatenate((vertices[start], vertices[end])) for start, end in connections])

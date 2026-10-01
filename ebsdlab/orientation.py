@@ -1,9 +1,6 @@
-##
-# @file
-# @brief Orientation class: combination of material symmetry and specific rotation.
-# Copyright:
-#   Original version was part of DAMASK <damask.mpie.de> (Martin Diehl, Philip Eisenlohr, Franz Roters)
-#
+# Orientation class: combination of material symmetry and specific rotation.
+# Attribution:
+#   Initial version was part of DAMASK <damask.mpie.de> (Martin Diehl, Philip Eisenlohr, Franz Roters)
 from typing import Any
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -12,18 +9,11 @@ from .symmetry import Symmetry
 
 
 class Orientation:
-    """Orientation class: combination of material symmetry and specific rotation
-    """
+    """Orientation class: combination of material symmetry and specific rotation"""
     __slots__ = ['quaternion', 'symmetry', 'plot2D', 'eps']
 
-    def __init__(self,
-                 quaternion: Rotation | None   = None,
-                 matrix:     np.ndarray | None = None,
-                 eulers:     np.ndarray | None = None,
-                 # put any integer to have a fixed seed or True for real random
-                 random:     bool | int        = False,
-                 symmetry:   str               = '',
-                 ) -> None:
+    def __init__(self, quaternion: Rotation | None = None, matrix: np.ndarray | None = None,
+                 eulers: np.ndarray | None = None, random: bool | int = False, symmetry: str = '') -> None:
         """Create an orientation from the first given of random, eulers, matrix, quaternion; else identity.
 
         Args:
@@ -33,20 +23,16 @@ class Orientation:
            random: True for a random orientation; an integer for a random orientation with this seed
            symmetry: lattice name, e.g. "cubic"; '' means not identified
         """
-        # produce random orientation
-        if random:
+        if random:                                                     # produce random orientation
             if isinstance(random, bool):
                 self.quaternion = Rotation.random()
             else:
                 self.quaternion = Rotation.random(random_state=random)
-        # based on given Euler angles
-        elif isinstance(eulers, np.ndarray) and eulers.shape == (3,):
+        elif isinstance(eulers, np.ndarray) and eulers.shape == (3,):  # based on given Euler angles
             self.quaternion = Rotation.from_euler('ZXZ', eulers)
-        # based on given rotation matrix
-        elif isinstance(matrix, np.ndarray):
+        elif isinstance(matrix, np.ndarray):                           # based on given rotation matrix
             self.quaternion = Rotation.from_matrix(matrix)
-        # based on a SciPy rotation
-        elif isinstance(quaternion, Rotation):
+        elif isinstance(quaternion, Rotation):                         # based on a SciPy rotation
             self.quaternion = Rotation.from_quat(quaternion.as_quat())
         else:
             self.quaternion = Rotation.identity()
@@ -83,16 +69,14 @@ class Orientation:
         if self.plot2D == '3D':
             fig = plt.figure()
             ax = fig.add_subplot(projection='3d')
-            # ax.view_init(90,0)
         else:
             fig, ax = plt.subplots()
 
         if unitCell:
             for line in self.symmetry.unitCell():
-                start, end = np.array(line[:3], dtype=float), np.array(
-                    line[3:], dtype=float)
+                start, end = np.array(line[:3], dtype=float), np.array(line[3:], dtype=float)
                 start = self.quaternion.apply(start)
-                end = self.quaternion.apply(end)
+                end   = self.quaternion.apply(end)
                 if start[2] < 0 and end[2] < 0:
                     self.plotLine(ax, start, end-start, color='b', lw=0.2)
                 elif start[2] > 0 and end[2] > 0:
@@ -107,10 +91,8 @@ class Orientation:
                     else:
                         self.plotLine(ax, start, mid-start, color='b', lw=0.2)
                         self.plotLine(ax, mid,   end-mid, color='b', lw=2)
-
         if cos:
             self.plotUnit(ax, 'RD [100]', 'TD [010]', 'ND [001]')
-
         if poles is not None:
             # plot sphere
             if self.plot2D == '3D':
@@ -119,14 +101,12 @@ class Orientation:
                 x = scale*np.outer(np.cos(u), np.sin(v))
                 y = scale*np.outer(np.sin(u), np.sin(v))
                 z = scale*np.outer(np.ones_like(u), np.cos(v))
-                ax.plot_surface(x, y, z, color='gray', alpha=0.7,
-                                cstride=10, rstride=10, lw=0)
+                ax.plot_surface(x, y, z, color='gray', alpha=0.7, cstride=10, rstride=10, lw=0)
             else:
                 ax.plot(scale*np.cos(np.linspace(0., 2.*np.pi, 100)),
                         scale*np.sin(np.linspace(0., 2.*np.pi, 100)), 'k--')
             # plot poles
-            oHelp = Orientation(eulers=np.array(
-                [0., 0., 0.]), symmetry=self.symmetry.lattice)
+            oHelp = Orientation(eulers=np.array([0., 0., 0.]), symmetry=self.symmetry.lattice)
             poles = np.array(poles, dtype=float)
             poles /= np.linalg.norm(poles)
             for _, q in enumerate(oHelp.symmetry.equivalentQuaternions(oHelp.quaternion)):
@@ -138,8 +118,7 @@ class Orientation:
                 # self.plotLine(ax, [0,0,0], direction*scale, color='c', lw=1) #in plane lines: not needed
                 if self.plot2D == '3D':
                     # lines from bottom base to points
-                    self.plotLine(
-                        ax, -scale*np.array([0, 0, 1]), (fromBase)*scale, 'c')
+                    self.plotLine(ax, -scale*np.array([0, 0, 1]), (fromBase)*scale, 'c')
                 xy = fromBase/fromBase[2]*scale
                 xy[2] = 0.0
                 self.plotLine(ax, xy, [0., 0., 0.], color='c')  # plot point
@@ -148,7 +127,6 @@ class Orientation:
                     label = str(np.array(conjAxis, dtype=int))[1:-1]
                     label = label.replace(' ', '')
                     ax.text(xCoordinate+0.05, yCoordinate+0.05, label)
-
         # finalize plot
         if self.plot2D == '3D':
             ax.axis('equal')
@@ -167,10 +145,9 @@ class Orientation:
         return
 
 
-    def plotUnit(self, ax: Any, xlabel: str, ylabel: str, zlabel: str,
-                 x: float = 0, y: float = 0, z: float = 0, s: float = 1) -> None:  # unit axis
-        """
-        Coordinate systems: see plotLine
+    def plotUnit(self, ax: Any, xlabel: str, ylabel: str, zlabel: str, x: float = 0, y: float = 0,
+                 z: float = 0, s: float = 1) -> None:  # unit axis
+        """Coordinate systems: see plotLine
 
         Args:
            ax: axis to used for plotting
@@ -191,16 +168,14 @@ class Orientation:
             ax.text(x+0.1, y+0.1, z+s, zlabel)
         else:
             ax.text(*(self.project(x+s,   y, z+0.1)+(xlabel,)))
-            ax.text(*(self.project(x+0.1, y+s, z+0.1) +
-                    (ylabel, {'ha': 'right'})))
+            ax.text(*(self.project(x+0.1, y+s, z+0.1) + (ylabel, {'ha': 'right'})))
             ax.text(*(self.project(x+0.1, y, z+s)+(zlabel,)))
         return
 
 
     def plotLine(self, ax: Any, start: Any, delta: Any, color: str = 'k', lw: float = 1, ls: str = 'solid',
                  markerSize: float | None = None) -> None:
-        """
-        Plot one line using given projection
+        """Plot one line using given projection
 
         Args:
            ax: axis to plot into
@@ -227,19 +202,18 @@ class Orientation:
             x, y = self.project([start[0]]+[start[0]+delta[0]],
                                 [start[1]]+[start[1]+delta[1]],
                                 [start[2]]+[start[2]+delta[2]])
-            ax.plot(x, y,  color=color, lw=lw, marker=marker,
-                    ls=ls, markersize=markerSize)
+            ax.plot(x, y,  color=color, lw=lw, marker=marker, ls=ls, markersize=markerSize)
         return
 
 
     def project(self, x: Any, y: Any, z: Any) -> tuple[np.ndarray, ...]:
         """Project 3D coordinates onto the 2D plot plane given by self.plot2D
 
-        down-right: y, -x
-        up-left   : -y, x
+        down-right : y, -x
+        up-left    : -y, x
         right-up   : x,y
-        left-down: -x,-y
-        3D        : x,y,z
+        left-down  : -x,-y
+        3D         : x,y,z
 
         Args:
            x: x-coordinate(s)
@@ -250,16 +224,15 @@ class Orientation:
            projected coordinates: two arrays; three for "3D"
         """
         x, y, z = np.asarray(x), np.asarray(y), np.asarray(z)
-        projections = {'down-right': (y, -x), 'up-left': (-y, x), 'right-up': (x, y),
-                       'left-down': (-x, -y), '3D': (x, y, z)}
+        projections = {'down-right': (y, -x), 'up-left': (-y, x), 'right-up': (x, y), 'left-down': (-x, -y),
+                       '3D': (x, y, z)}
         if self.plot2D not in projections:
             raise ValueError(f'plot2D must be one of {', '.join(projections)}, not {self.plot2D!r}')
         return projections[self.plot2D]
 
 
     def toScreen(self, equivalent: bool = True) -> None:
-        """
-        print Euler angles and HKL /UVW
+        """print Euler angles and HKL /UVW
 
         Args:
           equivalent: print also equivalent orientations
@@ -281,10 +254,8 @@ class Orientation:
 
     # @name CONVENTIONAL ROUTINES
     # @{
-    def asEulers(self,
-                 notation: str = 'bunge',
-                 degrees: bool = False,
-                 standardRange: bool = False) -> np.ndarray:
+    def asEulers(self, notation: str = 'bunge', degrees: bool = False, standardRange: bool = False
+                 ) -> np.ndarray:
         """Return this orientation's Euler angles in the requested convention.
 
         Args:
@@ -339,10 +310,8 @@ class Orientation:
         Returns:
            equivalent orientations
         """
-        return [
-            Orientation(quaternion=q, symmetry=self.symmetry.lattice)
-            for q in self.equivalentQuaternions(who)
-        ]
+        return [Orientation(quaternion=q, symmetry=self.symmetry.lattice)
+                for q in self.equivalentQuaternions(who)]
 
 
     def reduced(self) -> 'Orientation':
@@ -378,18 +347,15 @@ class Orientation:
           whether the result was conjugated
         """
         if self.symmetry != other.symmetry:
-            raise TypeError(
-                'disorientation between different symmetry classes not supported yet.')
+            raise TypeError('disorientation between different symmetry classes not supported yet.')
         misQ = self.quaternion.inv()*other.quaternion
-        mySymQs = self.symmetry.symmetryQuats() if sst else self.symmetry.symmetryQuats()[
-            :1]       # take all or only first sym operation
+        mySymQs = self.symmetry.symmetryQuats() if sst else self.symmetry.symmetryQuats()[:1] # take all or only first sym operation
         otherSymQs = other.symmetry.symmetryQuats()
         for i, sA in enumerate(mySymQs):  # if not in SST: only one sA
             for j, sB in enumerate(otherSymQs):  # changes always
                 candidate = sA.inv()*misQ*sB
                 for k, theQ in enumerate((candidate.inv(), candidate)):
-                    breaker = self.symmetry.inFZ(theQ) and (
-                        not sst or other.symmetry.inDisorientationSST(theQ))
+                    breaker = self.symmetry.inFZ(theQ) and (not sst or other.symmetry.inDisorientationSST(theQ))
                     if breaker:
                         break
                 if breaker:
@@ -448,9 +414,7 @@ class Orientation:
 
 
     @classmethod
-    def average(cls,
-                orientations: list['Orientation'],
-                multiplicity: Any = None) -> 'Orientation':
+    def average(cls, orientations: list['Orientation'], multiplicity: Any = None) -> 'Orientation':
         """Return the average orientation
 
         ref: F. Landis Markley, Yang Cheng, John Lucas Crassidis, and Yaakov Oshman,
@@ -480,8 +444,8 @@ class Orientation:
         reference = orientations[0]
         closestRotations = []
         for o in orientations:
-            closest = o.equivalentOrientations(reference.disorientation(o, sst=False)[2])[
-                0]             # select sym orientation with lowest misorientation
+            # select sym orientation with lowest misorientation
+            closest = o.equivalentOrientations(reference.disorientation(o, sst=False)[2])[0]
             closestRotations.append(closest.quaternion)
         mean = Rotation.concatenate(closestRotations).mean(weights=multiplicity)
         return Orientation(quaternion=mean,

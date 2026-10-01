@@ -1,4 +1,4 @@
-"""Small convention adapters around :mod:`scipy.spatial.transform`."""
+"""Ronvention adapters around :mod:`scipy.spatial.transform`."""
 
 import warnings
 import numpy as np
@@ -20,9 +20,7 @@ def asRodrigues(rotation: Rotation) -> np.ndarray:
         return quaternion[..., 1:] / quaternion[..., :1]
 
 
-def asBungeEulers(
-    rotation: Rotation, degrees: bool = False, standardRange: bool = False
-) -> np.ndarray:
+def asBungeEulers(rotation: Rotation, degrees: bool = False, standardRange: bool = False) -> np.ndarray:
     """Return intrinsic active ZXZ Euler angles in the Bunge convention.
 
     Args:

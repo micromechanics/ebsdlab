@@ -21,8 +21,8 @@
 - The global rules in `~/.codex/AGENTS.md` apply, with these local decisions:
   - Two empty lines above every `def`, also inside classes (except `__init__`).
   - Single quotes for strings; docstrings keep triple double quotes.
-  - Keep existing comments, including the Doxygen group markers (`##`, `# @name`, `# @{`, `# @}`); move them with
-    their methods when reordering.
+  - Keep useful existing comments; move them with their code when reordering. Doxygen markers (`##`, `# @file`,
+    `# @brief`, `# @name`, `# @{`, `# @}`) and commented-out code may be removed.
   - Leave tests as they are; add or change tests only when asked. `pytest --mpl` is a visual check: run it only
     when asked.
 

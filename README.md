@@ -1,44 +1,19 @@
 # ebsdlab
 
-ALPHA-VERSION: TRY AT OWN RISK
-
-Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in scanning electron microscopes to determine the crystallographic orientation of metals at the micrometer scale. This software package provides tools to import, analyze, and visualize the spatially resolved orientation data obtained from EBSD experiments, facilitating microstructural characterization.
-
-## Requirements
-`ebsdlab` supports Python >=3.10.
+Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in scanning electron microscopes to determine the crystallographic orientation at the micrometer scale. This software package provides tools to import, analyze, and visualize the data.
 
 ## Features:
-  - File formats accepted .ang | .osc | .crc | .txt
-  - can write .ang for FCC. Others could be added
-  - fast plotting: maps are drawn directly from the scan grid; virtual mask (only used for plotting)
-    - increases speed in intermediate test plots
-    - can be removed just before final plotting
+  - File formats accepted .ang | .osc | .crc | .ctf | .txt
+  - fast plotting: maps are drawn directly from the scan grid
+    - virtual mask (only used for plotting)
+      - increases speed in intermediate test plots
+      - can be removed just before final plotting
   - verified with the OIM software and mTex
-  - heavily tested for cubic
   - separate crystal orientation and plotting of it
   - some educational plotting
-  - examples and lots of documentation
+  - examples and documentation
+  - minimal requirements on libraries
 
-## Design scope
-`ebsdlab` analyzes already indexed EBSD orientation data for known phases. It is
-not intended to index raw Kikuchi patterns, identify phases from diffraction
-patterns, or simulate EBSD patterns.
-
-Accordingly, it models the rotational crystal symmetry required for orientation
-analysis, not complete atomistic crystal structures. Atomic basis positions,
-lattice centering, structure factors, and translational space-group operations
-such as glide planes and screw axes are out of scope. These details become
-necessary for phase identification, pattern simulation, or distinguishing
-closely related crystal structures, but not for orientation maps, IPF colors,
-misorientation, KAM, or pole-figure analysis of a known phase.
-
-## Phases
-Every point has a `phaseID` (`uint8`):
-- `0`: not identified; `emap.sym[0]` is an empty `Symmetry()`
-- `1, 2, ...`: phases; `emap.sym[k]` is the symmetry of phase `k`
-
-IPF maps, pole figures, unit-cell overlays and KAM use the symmetry of each point's phase; KAM ignores
-neighbors of another phase.
 
 ## Example
 EBSD-Inverse Pole Figure (IPF) of polycrystalline Copper with corresponding Pole Figure
@@ -49,8 +24,6 @@ EBSD-Inverse Pole Figure (IPF) of polycrystalline Copper with corresponding Pole
   </tr>
 </table>
 
-## Documentation
-[Documentation on github pages](https://micromechanics.github.io/ebsdlab/)
 
 ## Installation
 You can install `ebsdlab` using Conda or pip.
@@ -101,7 +74,7 @@ You can install `ebsdlab` using Conda or pip.
   ```
 </details>
 
-After that, the package can be imported and used in Python codes as
+After that, the package can be used as
 
 ```python
 >>> from ebsdlab import EBSD
@@ -111,17 +84,57 @@ After that, the package can be imported and used in Python codes as
 
 ### Graphical user interface
 
-For a local desktop interface for common plots, install the optional GUI
-dependency and start the application:
+Install the optional GUI dependency and start the application:
 
 ```console
 $ pip install 'ebsdlab[gui]'
 $ ebsdlab-gui
 ```
 
-The GUI supports CI maps, IPF maps, and pole figures; it can apply CI/crop/
-preview filters, place unit-cell overlays by clicking an IPF map, and copy the
-equivalent Python code.
+## Documentation
+[Documentation on github pages](https://micromechanics.github.io/ebsdlab/)
+
+## FAQ
+### What features I do not envision:
+  - include all crystal symmetries (materials science can mostly live with few)
+  - other Euler angle definitions than Bunge; materials science does not use those
+
+### Future features
+  - improve cleaning
+  - grain identification methods
+  - speed up simulation
+  - test non-cubic symmetries further: example data covers hexagonal, trigonal, orthorhombic, monoclinic and
+    triclinic phases; only hexagonal has image tests
+
+### Help wanted
+ - sample files with tetragonal phases
+ - feedback on tutorials
+ - any feedback on functionality
+ - help with cleaning and grain identification
+
+
+## Design scope
+`ebsdlab` analyzes already indexed EBSD orientation data for known phases. It is
+not intended to index raw Kikuchi patterns, identify phases from diffraction
+patterns, or simulate EBSD patterns.
+
+Accordingly, it models the rotational crystal symmetry required for orientation
+analysis, not complete atomistic crystal structures. Atomic basis positions,
+lattice centering, structure factors, and translational space-group operations
+such as glide planes and screw axes are out of scope. These details are  not important
+for orientation maps, IPF colors, misorientation, KAM, or pole-figure analysis of a known phase.
+
+## Phases
+Every point has a `phaseID` (`uint8`):
+- `0`: not identified; `emap.sym[0]` is an empty `Symmetry()`
+- `1, 2, ...`: phases; `emap.sym[k]` is the symmetry of phase `k`
+
+IPF maps, pole figures, unit-cell overlays and KAM use the symmetry of each point's phase; KAM ignores
+neighbors of another phase.
+
+## Requirements
+`ebsdlab` supports Python >=3.10.
+
 
 ## Development
 Use the local `.venv/` when it has been prepared for this repository, or create an environment with Python >=3.10 and install the development requirements.
@@ -152,11 +165,11 @@ Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebs
   - demo code incl. comments and savefig
 
 - Implement:grain reconstruction or ODF analysis at the level of mTex
-- Yapf use for formatting with 110
-- Neighbour and KAM calculations currently require scan rows ordered by x with
-  a decreasing-x reset between rows. Single-row and differently ordered grids cannot be supported. -> Exception
-- Implicit grid coordinates: done (storage, loaders, `xy()`, neighbors, KAM, map plotting). Open:
-  - Unordered or partial `.txt` exports now raise; sort them or keep explicit `x`, `y` if needed.
+- Unordered, partial or single-row maps raise `ValueError` on load; in practice this hits `.txt` partition exports.
+  Sort them or keep explicit `x`, `y` if needed.
+- `.osc`, `.txt`: the phase symmetry is not read from the file; pass `symmetry=`.
+- `writeANG` writes one cubic phase only (`Symmetry 43`, FCC hkl families); other symmetries are lost.
+- No tetragonal example data in `tests/DataFiles/`.
 
 - `.crc`, `.ctf`: only grid maps are read; `JobMode=Operator` or `Interactive` files (single points, e.g. other
   Zenodo 7837199 maps, MTEX `eclogite.ctf`) raise `ValueError`.
@@ -166,19 +179,3 @@ Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebs
   loader prints the factor. `writeANG` then writes the scaled IQ.
 
 
-## FAQ
-### What features I do not envision:
-  - include all crystal symmetries (materials science can mostly live with few)
-  - other Euler angle definitions than Bunge; materials science does not use those
-
-### Future features
-  - improve cleaning
-  - grain identification methods
-  - speed up simulation
-  - add different symmetries than cubic, and test
-
-### Help wanted
- - sample files other than copper OIM files
- - feedback on tutorials
- - any feedback on functionality
- - help with cleaning and grain identification
