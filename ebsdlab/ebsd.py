@@ -272,6 +272,7 @@ class EBSD:
         iClose      = int(self._nearestIndex(x, y))
         iQuaternion = self.quaternions[iClose]
         sym = self.sym[self.phaseID[iClose]]
+        ax.autoscale(False)  # the overlay must not change the map limits
         if sym.lattice:
             for start, end, lw in sym.unitCellSegments(iQuaternion, scale):
                 # OIM coordinate system and ``imshow(origin='upper')``.

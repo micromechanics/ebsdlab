@@ -7,3 +7,4 @@ Short, executable examples for common ebsdlab tasks.
    :maxdepth: 1
 
    symmetry-gallery
+   comparison-gallery

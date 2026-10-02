@@ -15,7 +15,7 @@ Advantages of ebsdlab
   ``.ang``, ``.ctf``, h5ebsd variants and EMsoft files, but not ``.osc`` or ``.crc``.
 - **Hexagonal grids:** handles TSL ``HexGrid`` scans natively, including the six-neighbor stencil
   for neighbor and KAM calculations. With orix, hexagonal scans are therefore usually converted to a square grid first (e.g. in EDAX
-OIM), which resamples the data. ebsdlab loads, plots and analyzes hexagonal scans directly.
+  OIM), which resamples the data. ebsdlab loads, plots and analyzes hexagonal scans directly.
 - **Memory:** imported Euler angles and scalar data are stored as ``float16``, which suits large
   maps; EBSD indexing accuracy (about 0.1°) does not benefit from higher input precision.
 - **Lightweight:** depends only on numpy, scipy and matplotlib (see `Dependencies`_).

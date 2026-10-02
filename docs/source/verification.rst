@@ -21,13 +21,13 @@ Compare ebsdlab with OIM and mTex
           :height: 300px
      - .. image:: _static/ebsd_mTex_ND.png
           :height: 300px
-     - .. image:: _static/ebsd_py_ND.png
+     - .. image:: ../../tests/baseline/test_ebsd_verification_ipf_ND.png
           :height: 300px
    * - IPF RD
      - .. image:: _static/ebsd_OIM_RD.bmp
           :height: 300px
      - I cannot produce
-     - .. image:: _static/ebsd_py_RD.png
+     - .. image:: ../../tests/baseline/test_ebsd_verification_ipf_RD.png
           :height: 300px
 
 Issues in mTex:
@@ -47,6 +47,19 @@ Issues in mTex:
      :height: 200px
 
 
+Python code to create ebsdlab results:
+
+.. jupyter-execute::
+
+     from ebsdlab.ebsd import EBSD
+     e = EBSD("../tests/DataFiles/EBSD.ang")
+     e.maskCI(0.1)
+     e.plotIPF("ND")
+     e.addScaleBar()
+     e.plotIPF("RD")
+     e.addScaleBar();
+
+
 Compare the three software for bicrystal
 ----------------------------------------
 
@@ -62,39 +75,36 @@ Compare the three software for bicrystal
           :width: 300px
      - .. image:: _static/bc_mTex_ND.png
           :width: 300px
-     - .. image:: _static/bc_py_ND.png
+     - .. image:: ../../tests/baseline/test_ebsd_bicrystal_ipf_ND.png
           :width: 300px
    * - IPF RD
      - .. image:: _static/bc_OIM_RD_y.bmp
           :width: 300px
      - I cannot produce
-     - .. image:: _static/bc_py_RD.png
+     - .. image:: ../../tests/baseline/test_ebsd_bicrystal_ipf_RD.png
           :width: 300px
    * - PF [100]
      - .. image:: _static/bc_OIM_PF.bmp
-          :height: 200px
+          :width: 300px
      - .. image:: _static/bc_mTex_PF.png
-          :height: 200px
-     - .. image:: _static/bc_py_PF.png
-          :height: 200px
+          :width: 300px
+     - .. image:: ../../tests/baseline/test_ebsd_bicrystal_pf.png
+          :width: 300px
 
 
-Python code to create ebsdlab results:
+Python code to create the bicrystal results:
 
 .. jupyter-execute::
 
-     from ebsdlab.ebsd import EBSD
      e = EBSD("../tests/DataFiles/EBSD.ang")
      e.cropVMask(ymin=35)
      e.plotIPF("ND")
-     e.addSymbol(5,37, scale=2)
-     e.addSymbol(18,37, scale=2)
+     e.addSymbol(5, 37, scale=2)
+     e.addSymbol(18, 37, scale=2)
      e.plotIPF("RD")
-     e.addSymbol(5,37, scale=2)
-     e.addSymbol(18,37, scale=2)
-     e.plotIPF("TD")
-     e.addSymbol(5,37, scale=2)
-     e.addSymbol(18,37, scale=2)
+     e.addSymbol(5, 37, scale=2)
+     e.addSymbol(18, 37, scale=2)
+     e.plotPF([1, 0, 0], points=True)
 
 
 How to run mTex

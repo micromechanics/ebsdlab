@@ -68,30 +68,30 @@ The following table shows details that can improve / modify the plots.
           #Plot confidence index (CI) with CI mask:
           e.maskCI(0.1)
           e.plot(e.ci)
-     - .. image:: /_static/test_ebsd_ci_mask.png
+     - .. image:: ../../tests/baseline/test_ebsd_ci_mask.png
    * - .. code-block:: python
 
           #Plot IPF with 1024 pixel resolution:
           e.plotIPF(1024)
-     - .. image:: /_static/test_ebsd_ipf_1024.png
+     - .. image:: ../../tests/baseline/test_ebsd_ipf_1024.png
    * - .. code-block:: python
 
           #Plot IPF but only every 4th point
           #  increases plotting speed:
           e.setVMask(4)
           e.plotIPF(1024)
-     - .. image:: /_static/test_ebsd_ipf_vmask.png
+     - .. image:: ../../tests/baseline/test_ebsd_ipf_vmask.png
    * - .. code-block:: python
 
           #Plot section of IPF
           e.cropVMask(0,0,10,10)
           e.plotIPF(1024)
-     - .. image:: /_static/test_ebsd_ipf_crop.png
+     - .. image:: ../../tests/baseline/test_ebsd_ipf_crop.png
    * - .. code-block:: python
 
           #Plot Pole Figure (PF) with points:
           e.plotPF([1,0,0], points=True)
-     - .. image:: /_static/test_ebsd_pf_points.png
+     - .. image:: ../../tests/baseline/test_ebsd_pf_points.png
 
 Data that exists and can be used for plotting in plot
 -----------------------------------------------------

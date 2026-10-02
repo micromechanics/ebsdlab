@@ -3,7 +3,9 @@
 
 import numpy as np
 import pytest
+import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation
+from ebsdlab.orientation import Orientation
 from ebsdlab.symmetry import GROUPS, Symmetry
 
 
@@ -176,3 +178,13 @@ def test_unknown_symmetry_name_raises():
     assert Symmetry('Cubic').lattice == 'cubic'
     with pytest.raises(ValueError, match='Unknown symmetry'):
         Symmetry('cubik')
+
+
+@pytest.mark.mpl_image_compare
+def test_orientation_111_3d():
+    """Unit cell with [111] along ND and its [100] poles, shown in the orientation documentation."""
+    hkl = np.array([1, 1, 1])/np.sqrt(3)
+    uvw1 = np.array([1, -1, 0])/np.sqrt(2)
+    o = Orientation(matrix=np.vstack((uvw1, np.cross(hkl, uvw1), hkl)), symmetry='cubic')
+    o.plot([1, 0, 0], plot2D='3D')
+    return plt.gcf()

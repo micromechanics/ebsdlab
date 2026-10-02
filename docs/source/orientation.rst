@@ -65,7 +65,7 @@ Example: [111] direction using vectors
 
 The [111] direction can be challenging to define ad-hoc using Euler angles. This example demonstrates how to calculate and verify it using vectors. At the end, we plot the crystal and the poles of the [100] in the standard stereographic projection.
 
-.. image:: /_static/ebsd_Orientation1.png
+.. image:: ../../tests/baseline/test_orientation_111_3d.png
 
 Procedure:
 

@@ -3,6 +3,7 @@
 from pathlib import Path
 import numpy as np
 import pytest
+import matplotlib.pyplot as plt
 from ebsdlab.ebsd import EBSD
 from ebsdlab.fileIO import LOADERS
 
@@ -137,3 +138,33 @@ def test_grid_neighbors_are_one_step_away(tmp_path, fileName, grid, nNeighbors):
     np.testing.assert_allclose(distance, ebsd.stepSizeX, rtol=1e-3)
     if grid == 'HexGrid':  # interior points have all six neighbors
         assert np.sum(np.all(neighbors >= 0, axis=1)) > 0.9*ebsd.nPoints
+
+
+@pytest.mark.mpl_image_compare(savefig_kwargs={'bbox_inches': 'tight'})
+@pytest.mark.parametrize('direction', ['ND', 'RD'])
+def test_ebsd_verification_ipf(direction):
+    """IPF compared to OIM and MTEX in the documentation."""
+    e = EBSD(str(DATA_DIR/'EBSD.ang'))
+    e.maskCI(0.1)
+    e.plotIPF(direction, show=False)
+    return e.addScaleBar()
+
+
+@pytest.mark.mpl_image_compare(savefig_kwargs={'bbox_inches': 'tight'})
+@pytest.mark.parametrize('direction', ['ND', 'RD'])
+def test_ebsd_bicrystal_ipf(direction):
+    """Bicrystal section with unit-cell symbols, compared to OIM and MTEX in the documentation."""
+    e = EBSD(str(DATA_DIR/'EBSD.ang'))
+    e.cropVMask(ymin=35)
+    e.plotIPF(direction, show=False)
+    e.addSymbol(5, 37, scale=2)
+    e.addSymbol(18, 37, scale=2)
+    return plt.gcf()
+
+
+@pytest.mark.mpl_image_compare(savefig_kwargs={'bbox_inches': 'tight'})
+def test_ebsd_bicrystal_pf():
+    """Pole figure of the bicrystal section, compared to OIM and MTEX in the documentation."""
+    e = EBSD(str(DATA_DIR/'EBSD.ang'))
+    e.cropVMask(ymin=35)
+    return e.plotPF([1, 0, 0], points=True, show=False)
