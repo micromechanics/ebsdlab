@@ -160,22 +160,29 @@ $ python -m pylint ebsdlab
 ## Issues
 Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may also be documented in this repository when they need to stay alongside the code.
 
-- Much polishing, incl GUI, Code
-  - Make fast preview clearer
-  - demo code incl. comments and savefig
+### Group: check orientations
+- ensure that all doc image-files from ebsdlab come from builds;
+- add more checks to compare other file outputs with those from references/Orix...
+- Euler angles of all formats are used as stored. Hex/trigonal crystal frame: `.ctf`, `.crc` use X||a*, ebsdlab and
+  `.ang`, `.osc` X||a (30° about c, fix: q*Rz(-30°)). Specimen frame: MTEX rotates by 180° about [1-10] (`.ang`
+  setting 2) or Z (`.ctf`, `.crc`) into the map frame; ebsdlab does not, so PFs and RD/TD IPFs differ by vendor.
 
-- Implement:grain reconstruction or ODF analysis at the level of mTex
-- Unordered, partial or single-row maps raise `ValueError` on load; in practice this hits `.txt` partition exports.
-  Sort them or keep explicit `x`, `y` if needed.
-- `.osc`, `.txt`: the phase symmetry is not read from the file; pass `symmetry=`.
-- `writeANG` writes one cubic phase only (`Symmetry 43`, FCC hkl families); other symmetries are lost.
-- No tetragonal example data in `tests/DataFiles/`.
+### Group: implement new features
+- Implement:grain reconstruction
+- `plotPF` distribution: replace the pixel Gaussian on the stereographic image by a pole density function: von
+  Mises-Fisher kernel (width in degrees) on the sphere, equal-area grid, normalized to mrd, then projected. Fixes
+  rim/area distortion and gives comparable units; a step towards ODFs, which smooth in orientation space.
+- `plotPF`: `xs, ys = [], []` is inside the phase loop, so a multi-phase pole figure shows only the last phase;
+  move it above the loop.
 
-- `.crc`, `.ctf`: only grid maps are read; `JobMode=Operator` or `Interactive` files (single points, e.g. other
-  Zenodo 7837199 maps, MTEX `eclogite.ctf`) raise `ValueError`.
-- `.crc`, `.ctf`, `.ang`: the low Laue classes m-3, 6/m, 4/m, -3 are treated as m-3m, 6/mmm, 4/mmm, -3m.
-- `.ctf`: Euler angles are used as stored, like `.crc`; no Oxford-to-EDAX reference-frame conversion.
-- `.osc`: IQ is kept as `float16`; if it exceeds 65504 (MTEX `copper.osc`), it is divided by a power of 10 and the
-  loader prints the factor. `writeANG` then writes the scaled IQ.
+### Group: GUI
+- Goal: extremely simple; only key parameters visible, everything else in the generated .py code.
+- Flow: load once (info line) → process (min CI, crop to toolbar view, KAM on demand, cached) → plot; every change
+  replots, no button. One 'Show' list: IPF (+direction), phase, IQ, CI, KAM, PF (+axis).
+- Have one button at the end, render in full detail (omitting automatic vmask)
+- Defaults instead of options: scale bar on, axes off, unit-cell size from map (possibly 3 settings), automatic preview vmask for large
+  maps. Formats from `fileIO.LOADERS` (adds `.ctf`).
+- Generated code: ample comments, full map, ends with `plt.savefig(...)`.
+
 
 

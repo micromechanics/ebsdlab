@@ -56,6 +56,7 @@ class EBSD:
         startTime        = time.time()
         self.scanUnit    = 'um'
         self.sym: list[Symmetry] = []  # loaders add phase 1, 2, ...
+        self._gridIndex: np.ndarray | None = None  # set by _setGrid for unordered or partial maps
 
         # read input file header and parse it
         self.fileName = str(fileName)
@@ -69,6 +70,17 @@ class EBSD:
             raise ValueError('Unsupported file format. Supported formats: '+ ', '.join(set(fileIO.LOADERS)))
 
         # all files loaded
+        if self._gridIndex is not None:  # place points onto the full grid; missing points: ci=-1, phaseID=0
+            for name, values in list(vars(self).items()):
+                if isinstance(values, np.ndarray) and values.shape == self._gridIndex.shape and name != '_gridIndex':
+                    full = np.zeros(self.nPoints, dtype=values.dtype)
+                    full[self._gridIndex] = values
+                    setattr(self, name, full)
+            missing = np.ones(self.nPoints, dtype=bool)
+            missing[self._gridIndex] = False
+            self.ci[missing] = -1
+            print('   Missing points filled:', missing.sum())
+            self._gridIndex = None
         if symmetry:
             self.sym = [Symmetry(symmetry)] * max(1, int(self.phaseID.max()))
         # phases without known symmetry are not identified
@@ -590,27 +602,58 @@ class EBSD:
 
 
     def _setGrid(self, x: np.ndarray, y: np.ndarray) -> None:
-        """Derive grid parameters from row-major coordinates; the coordinates themselves are not stored.
+        """Derive grid parameters from the coordinates; the coordinates themselves are not stored.
+        If the points are unordered, partial (e.g. partition exports) or a single row, self._gridIndex is the grid
+        position of each point; __init__ then places all per-point data onto the full grid.
 
         Args:
            x: x-coordinates of all points
            y: y-coordinates of all points
         """
+        self._gridIndex = None
         rowStarts = np.flatnonzero(np.diff(x) < 0) + 1
-        if len(rowStarts) == 0:
-            raise ValueError('EBSD data must contain more than one scan row.')
-        self.nPoints     = len(x)
-        self.nRows       = len(rowStarts) + 1
-        self.nColsOdd    = int(rowStarts[0])
-        self.nColsEven   = int(rowStarts[1] if len(rowStarts) > 1 else len(x)) - self.nColsOdd
-        self.x0, self.y0 = float(x[0]), float(y[0])
-        self.stepSizeX   = float(x[1] - x[0])
-        self.stepSizeY   = float(y[self.nColsOdd] - y[0])
-        self.xOffset     = float(x[self.nColsOdd] - x[0])
-        self.grid        = 'HexGrid' if abs(self.xOffset) > self.stepSizeX/10 else 'SqrGrid'
-        xGrid, yGrid     = self.xy()
-        if not (np.allclose(xGrid, x, atol=self.stepSizeX/10) and np.allclose(yGrid, y, atol=self.stepSizeY/10)):
-            raise ValueError('EBSD data is not a complete, row-major rectangular or hexagonal grid.')
+        if len(rowStarts):  # complete row-major grid
+            self.nPoints     = len(x)
+            self.nRows       = len(rowStarts) + 1
+            self.nColsOdd    = int(rowStarts[0])
+            self.nColsEven   = int(rowStarts[1] if len(rowStarts) > 1 else len(x)) - self.nColsOdd
+            self.x0, self.y0 = float(x[0]), float(y[0])
+            self.stepSizeX   = float(x[1] - x[0])
+            self.stepSizeY   = float(y[self.nColsOdd] - y[0])
+            self.xOffset     = float(x[self.nColsOdd] - x[0])
+            self.grid        = 'HexGrid' if abs(self.xOffset) > self.stepSizeX/10 else 'SqrGrid'
+            xGrid, yGrid     = self.xy()
+            if np.allclose(xGrid, x, atol=self.stepSizeX/10) and np.allclose(yGrid, y, atol=self.stepSizeY/10):
+                return
+
+        def smallestStep(gaps: np.ndarray) -> float:
+            gaps = gaps[gaps > 1e-3*gaps.max()] if len(gaps) else gaps  # ignore rounding noise
+            return float(gaps.min()) if len(gaps) else 0.0
+        self.y0        = float(y.min())
+        self.stepSizeY = smallestStep(np.diff(np.unique(y)))
+        row            = np.rint((y-self.y0)/self.stepSizeY).astype(int) if self.stepSizeY else np.zeros(len(y), int)
+        order          = np.lexsort((x, row))
+        self.stepSizeX = smallestStep(np.diff(x[order])[np.diff(row[order]) == 0])
+        self.stepSizeX = self.stepSizeX or self.stepSizeY  # single column
+        self.stepSizeY = self.stepSizeY or self.stepSizeX  # single row
+        if not self.stepSizeX:
+            raise ValueError('EBSD data must contain more than one point.')
+        even         = row % 2 == 1  # 2nd row of the pair of rows
+        self.xOffset = 0.0
+        if even.any() and abs((x[even].min()-x[~even].min())/self.stepSizeX % 1 - 0.5) < 0.1:
+            self.xOffset = self.stepSizeX/2
+        self.grid      = 'HexGrid' if self.xOffset else 'SqrGrid'
+        self.x0        = float(min(x[~even].min(), x[even].min()-self.xOffset if even.any() else np.inf))
+        col            = np.rint((x - self.x0 - even*self.xOffset)/self.stepSizeX).astype(int)
+        self.nRows     = int(row.max()) + 1
+        if self.grid == 'HexGrid':
+            self.nColsOdd, self.nColsEven = int(col[~even].max()) + 1, int(col[even].max()) + 1
+        else:
+            self.nColsOdd  = int(col.max()) + 1
+            self.nColsEven = self.nColsOdd if self.nRows > 1 else 0
+        period          = self.nColsOdd + self.nColsEven
+        self.nPoints    = (self.nRows//2)*period + (self.nRows % 2)*self.nColsOdd
+        self._gridIndex = (row//2)*period + even*self.nColsOdd + col
         return
 
 
