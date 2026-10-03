@@ -37,6 +37,7 @@ Table of Contents
    symmetry
    howto/index
    orientation
+   conventions
    verification
    comparisonOrix
    api

@@ -23,12 +23,16 @@ Compare ebsdlab with OIM and mTex
           :height: 300px
      - .. image:: ../../tests/baseline/test_ebsd_verification_ipf_ND.png
           :height: 300px
-   * - IPF RD
+   * - IPF RD (OIM), TD (ebsdlab)
      - .. image:: _static/ebsd_OIM_RD.bmp
           :height: 300px
      - I cannot produce
-     - .. image:: ../../tests/baseline/test_ebsd_verification_ipf_RD.png
+     - .. image:: ../../tests/baseline/test_ebsd_verification_ipf_TD.png
           :height: 300px
+
+OIM's RD is the file's x-axis, which points up in the map. ebsdlab names the directions after the map
+(RD = X right, TD = Y down, ND = Z into the sample; see :ref:`conventions`), so OIM's
+RD is ebsdlab's -TD, which has the same IPF colors.
 
 Issues in mTex:
 
@@ -56,7 +60,7 @@ Python code to create ebsdlab results:
      e.maskCI(0.1)
      e.plotIPF("ND")
      e.addScaleBar()
-     e.plotIPF("RD")
+     e.plotIPF("TD")
      e.addScaleBar();
 
 
@@ -77,11 +81,11 @@ Compare the three software for bicrystal
           :width: 300px
      - .. image:: ../../tests/baseline/test_ebsd_bicrystal_ipf_ND.png
           :width: 300px
-   * - IPF RD
+   * - IPF RD (OIM), TD (ebsdlab)
      - .. image:: _static/bc_OIM_RD_y.bmp
           :width: 300px
      - I cannot produce
-     - .. image:: ../../tests/baseline/test_ebsd_bicrystal_ipf_RD.png
+     - .. image:: ../../tests/baseline/test_ebsd_bicrystal_ipf_TD.png
           :width: 300px
    * - PF [100]
      - .. image:: _static/bc_OIM_PF.bmp
@@ -101,7 +105,7 @@ Python code to create the bicrystal results:
      e.plotIPF("ND")
      e.addSymbol(5, 37, scale=2)
      e.addSymbol(18, 37, scale=2)
-     e.plotIPF("RD")
+     e.plotIPF("TD")
      e.addSymbol(5, 37, scale=2)
      e.addSymbol(18, 37, scale=2)
      e.plotPF([1, 0, 0], points=True)

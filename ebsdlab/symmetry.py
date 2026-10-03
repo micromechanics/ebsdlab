@@ -145,11 +145,10 @@ GROUPS: dict[str, dict[str, Any]] = {
     'trigonal': {
         'rotation_group': 'D3',
         'sst_bases': {
-            # A 60 degree azimuthal wedge in the upper/lower hemisphere.
-            'improper': np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0],
-                                  [np.sqrt(3.0), -1.0, 0.0]]),
-            'proper': np.array([[0.0, 0.0, -1.0], [0.0, 1.0, 0.0],
-                                [np.sqrt(3.0), -1.0, 0.0]]),
+            # A 60 degree azimuthal wedge in the upper/lower hemisphere, between the mirror planes of D3 (2-fold
+            # axes along a = x): from [10-10] at 30° (blue) to [01-10] at 90° (green), as Oxford's key 001-210-120
+            'improper': np.array([[0.0, 0.0, 1.0], [-1.0, np.sqrt(3.0), 0.0], [2.0, 0.0, 0.0]]),
+            'proper': np.array([[0.0, 0.0, -1.0], [-1.0, np.sqrt(3.0), 0.0], [2.0, 0.0, 0.0]]),
         },
         'cell': {
             'geometry': 'rhombohedral',

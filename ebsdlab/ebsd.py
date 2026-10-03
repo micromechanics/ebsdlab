@@ -94,6 +94,7 @@ class EBSD:
         # convert into quaternions and only use that
         eulers = np.vstack((self.phi1, self.phi, self.phi2))
         self.quaternions = Rotation.from_euler('ZXZ', eulers.T)
+        fileIO.rotateToConventions(self, suffix)
         del self.phi1
         del self.phi
         del self.phi2
@@ -274,9 +275,9 @@ class EBSD:
         sym = self.sym[self.phaseID[iClose]]
         ax.autoscale(False)  # the overlay must not change the map limits
         if sym.lattice:
-            for start, end, lw in sym.unitCellSegments(iQuaternion, scale):
-                # OIM coordinate system and ``imshow(origin='upper')``.
-                ax.plot([x-start[1], x-end[1]], [y-start[0], y-end[0]], color=colorCube, lw=lw)
+            # seen from above the sample (-Z): turned 180° about X, the edges toward the viewer have z > 0
+            for start, end, lw in sym.unitCellSegments(Rotation.from_rotvec([np.pi, 0, 0])*iQuaternion, scale):
+                ax.plot([x+start[0], x+end[0]], [y-start[1], y-end[1]], color=colorCube, lw=lw)
         return int(iClose)
 
 
@@ -338,12 +339,8 @@ class EBSD:
 
     def plotPF(self, axis: Any = (1, 0, 0), points: bool = False, fileName: str = '', color: str = '#1f77b4',
                alpha: float = 1.0, show: bool = True, density: int = 256, size: int = 2,
-               proj2D: str = 'up-left', vmin: float = 0.0, vmax: float = 1.0) -> Any:
-        """plot pole figure
-
-        Projection onto 2D: cooradinate systems are given as xDirection-yDirection (z follows)
-        - down-right: [default in text books, mTex] RD = x = down; TD = y = right; ND = z = outOfPlane
-        - up-left: [default in OIM and here] RD = x = up; TD = y = left; ND = z = outOfPlane
+               vmin: float = 0.0, vmax: float = 1.0) -> Any:
+        """plot pole figure, oriented as the map: X right, Y down, seen from above the sample (upper hemisphere -Z)
 
         Args:
           axis:    axis to plot: default: axis=1,0,0
@@ -354,12 +351,11 @@ class EBSD:
           show:    show figure [default], False for subsequent plotting
           density: how many points to plot on the distribution
           size:    points: point size; distribution: amount of smoothing: higher more smoothing
-          proj2D:  orientation of 2D projection: [down-right, up-left, None]
           vmin:    minimum value plotted, used as cut-off for transparency
           vmax:    max. used in color coding, allows to focus on minor texture
 
         Returns:
-          matplotlib figure; None for an unknown proj2D
+          matplotlib figure
         """
         startTime = time.time()
         fig, ax = plt.subplots()
@@ -376,20 +372,13 @@ class EBSD:
                 conjAxis = q.apply(axis)
                 direction = self.quaternions.apply(conjAxis)
                 direction = direction[mask]  # filter mask
-                # filter upward dome
-                direction = direction[direction[:, 2] > 0]
-                direction[:, 0] /= direction[:, 2]+1.
-                direction[:, 1] /= direction[:, 2]+1.
-                xs.append(direction[:, 0])
-                ys.append(direction[:, 1])
+                # upper hemisphere: toward the viewer above the sample; Y down in the plot
+                direction = direction[direction[:, 2] < 0]
+                xs.append(direction[:, 0]/(1.-direction[:, 2]))
+                ys.append(-direction[:, 1]/(1.-direction[:, 2]))
         x, y = np.concatenate(xs), np.concatenate(ys)
         if points:
-            if proj2D == 'down-right':
-                ax.plot(-x, y, '.', color=maxColor, markersize=size)
-            elif proj2D == 'up-left':
-                ax.plot(-y, x, '.', color=maxColor, markersize=size)
-            else:
-                return
+            ax.plot(x, y, '.', color=maxColor, markersize=size)
             ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
                     np.sin(np.linspace(0, 2*np.pi, 100)), 'k-')
             ax.plot([-1, 1], [0, 0], 'k--')
@@ -400,13 +389,7 @@ class EBSD:
             imgDim = density+2*size
             img = np.zeros((imgDim, imgDim))
             x, y = np.nan_to_num(x), np.nan_to_num(y)
-            if proj2D == 'down-right':
-                zippedList = list(zip(-x, y))
-            elif proj2D == 'up-left':
-                zippedList = list(zip(-y, x))
-            else:
-                return
-            for xCoordinate, yCoordinate in zippedList:
+            for xCoordinate, yCoordinate in zip(x, y):
                 ix = int((xCoordinate - -1.) * center) + size
                 iy = int((yCoordinate - -1.) * center) + size
                 if 0 <= ix < imgDim and 0 <= iy < imgDim:

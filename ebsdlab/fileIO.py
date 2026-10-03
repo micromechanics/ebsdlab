@@ -1,4 +1,6 @@
 # Read and write EBSD files: loaders fill an EBSD instance, writeANG writes one
+#
+# Conventions (sample frame, crystal frame, vendor frames): docs/source/conventions.rst
 
 from __future__ import annotations
 import math
@@ -13,6 +15,29 @@ from ._rotation import asBungeEulers
 from .symmetry import GROUPS, Symmetry
 if TYPE_CHECKING:
     from .ebsd import EBSD
+
+# vendor frames, see docs/source/conventions.rst: q = SAMPLE * q_file * CRYSTAL
+EDAX_SAMPLE    = Rotation.from_rotvec(np.pi*np.array([1, -1, 0])/np.sqrt(2))  # 180° about [1-10]
+OXFORD_CRYSTAL = Rotation.from_euler('z', -30, degrees=True)                  # hexagonal/trigonal only
+FRAMES = {'.ang': (EDAX_SAMPLE, None), '.osc': (EDAX_SAMPLE, None), '.txt': (EDAX_SAMPLE, None),
+          '.crc': (None, OXFORD_CRYSTAL), '.ctf': (None, OXFORD_CRYSTAL)}
+
+
+def rotateToConventions(ebsd: EBSD, suffix: str) -> None:
+    """Rotate the orientations, as stored in a file, into the conventions of docs/source/conventions.rst
+
+    Args:
+       ebsd: instance with quaternions and symmetries of the loaded file
+       suffix: file suffix, e.g. '.ang'; files not in FRAMES are not rotated
+    """
+    sample, crystal = FRAMES.get(suffix, (None, None))
+    if sample is not None:
+        ebsd.quaternions = sample * ebsd.quaternions
+    if crystal is not None:
+        for phase, sym in enumerate(ebsd.sym):
+            points = ebsd.phaseID == phase
+            if sym.lattice in ('hexagonal', 'trigonal') and points.any():
+                ebsd.quaternions[points] = ebsd.quaternions[points] * crystal
 
 # The low Laue classes m-3, 6/m, 4/m, -3 use the high ones m-3m, 6/mmm, 4/mmm, -3m of their crystal system;
 #    the loaders warn when they meet one.
@@ -191,7 +216,8 @@ def loadTXT(ebsd: EBSD, fileName: str = '', update: bool = False) -> None:
         idx, data = idx[onMap], data[onMap]
         ebsd.mask[:]   = False
         ebsd.mask[idx] = True
-        ebsd.quaternions[idx] = Rotation.from_euler('ZXZ', data[:, foundKeys['phi1,']-1:foundKeys['phi1,']+2])
+        ebsd.quaternions[idx] = EDAX_SAMPLE * Rotation.from_euler('ZXZ',
+                                                                  data[:, foundKeys['phi1,']-1:foundKeys['phi1,']+2])
         if 'IQ' in foundKeys:
             ebsd.iq[idx] = data[:, foundKeys['IQ'] - 1]
         if 'CI' in foundKeys:
@@ -507,7 +533,7 @@ def writeANG(ebsd: EBSD, fileName: str) -> None:
     xs, ys = ebsd.xy()
     phaseID = ebsd.phaseID if ebsd.phaseID.max() > 1 else np.zeros_like(ebsd.phaseID)
     for i in range(ebsd.nPoints):
-        phi1, phi, phi2 = tuple(asBungeEulers(ebsd.quaternions[i]))
+        phi1, phi, phi2 = tuple(asBungeEulers(EDAX_SAMPLE.inv() * ebsd.quaternions[i]))
         fileOut.write(f' {phi1:8.5f} {phi:8.5f} {phi2:8.5f} {xs[i]:12.5f} {ys[i]:12.5f} {ebsd.iq[i]:8.3f}'
                       f' {ebsd.ci[i]:6.3f} {phaseID[i]:2d} {int(ebsd.semSignal[i]):6d} {ebsd.fit[i]:7.3f}\n')
     fileOut.close()

@@ -141,7 +141,7 @@ def test_grid_neighbors_are_one_step_away(tmp_path, fileName, grid, nNeighbors):
 
 
 @pytest.mark.mpl_image_compare(savefig_kwargs={'bbox_inches': 'tight'})
-@pytest.mark.parametrize('direction', ['ND', 'RD'])
+@pytest.mark.parametrize('direction', ['ND', 'TD'])
 def test_ebsd_verification_ipf(direction):
     """IPF compared to OIM and MTEX in the documentation."""
     e = EBSD(str(DATA_DIR/'EBSD.ang'))
@@ -151,7 +151,7 @@ def test_ebsd_verification_ipf(direction):
 
 
 @pytest.mark.mpl_image_compare(savefig_kwargs={'bbox_inches': 'tight'})
-@pytest.mark.parametrize('direction', ['ND', 'RD'])
+@pytest.mark.parametrize('direction', ['ND', 'TD'])
 def test_ebsd_bicrystal_ipf(direction):
     """Bicrystal section with unit-cell symbols, compared to OIM and MTEX in the documentation."""
     e = EBSD(str(DATA_DIR/'EBSD.ang'))
