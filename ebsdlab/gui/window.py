@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox,
                                QMessageBox, QPushButton, QSpinBox, QSplitter,
                                QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
-from ..ebsd import EBSD, SUPPORTED_SUFFIXES
+from ..ebsd import EBSD
+from ..fileIO import LOADERS
 from .rangeSelector import RangeSelector
 
 
@@ -28,6 +29,7 @@ class EBSDGui(QMainWindow):
         self.figure:   Any                              = None
         self.canvas:   FigureCanvasQTAgg | None         = None
         self.toolbar:  NavigationToolbar2QT | None      = None
+        self.placeholder: QLabel | None                 = None
         self.overlays: list[tuple[float, float, float]] = []
         self.setWindowTitle('ebsdlab')
         self.resize(1280, 800)
@@ -93,8 +95,9 @@ class EBSDGui(QMainWindow):
         Args:
            event: matplotlib mouse event
         """
-        if (self.ebsd is None or self.canvas is None or self.plotType.currentText() != 'IPF map'
-                or event.inaxes is None or event.xdata is None or event.ydata is None):
+        if self.ebsd is None or self.canvas is None or self.plotType.currentText() != 'IPF map':
+            return
+        if event.inaxes is None or event.xdata is None or event.ydata is None:  # click outside the map
             return
         scale = self.overlayScale.value()
         self.ebsd.addUnitCellOverlay(event.inaxes, event.xdata, event.ydata, scale)
@@ -200,7 +203,7 @@ class EBSDGui(QMainWindow):
         self.plotHolder = QWidget(splitter)
         self.plotLayout = QVBoxLayout(self.plotHolder)
         self.plotLayout.setContentsMargins(0, 0, 0, 0)
-        self.placeholder: QLabel | None = QLabel('Choose an EBSD file to begin.', self.plotHolder)
+        self.placeholder = QLabel('Choose an EBSD file to begin.', self.plotHolder)
         self.plotLayout.addWidget(self.placeholder)
         splitter.addWidget(self.plotHolder)
         splitter.setSizes([350, 930])
@@ -265,8 +268,8 @@ class EBSDGui(QMainWindow):
         """
         if self.filePath is None or not self.filePath.is_file():
             raise ValueError('Choose an existing EBSD data file.')
-        if self.filePath.suffix.lower() not in SUPPORTED_SUFFIXES:
-            raise ValueError('Supported formats are .ang, .osc, .txt, and .crc.')
+        if self.filePath.suffix.lower() not in LOADERS:
+            raise ValueError('Supported formats are ' + ', '.join(LOADERS) + '.')
         self.ebsd = EBSD(str(self.filePath))
         return self.ebsd
 

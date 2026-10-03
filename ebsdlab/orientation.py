@@ -1,7 +1,9 @@
-# Orientation class: combination of material symmetry and specific rotation.
-# Attribution:
-#   Initial version was part of DAMASK <damask.mpie.de> (Martin Diehl, Philip Eisenlohr, Franz Roters)
+"""Orientation class: combination of material symmetry and specific rotation.
+
+Attribution: initial version was part of DAMASK <damask.mpie.de> (Martin Diehl, Philip Eisenlohr, Franz Roters)
+"""
 from typing import Any
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.transform import Rotation
 from ._rotation import asBungeEulers
@@ -27,7 +29,7 @@ class Orientation:
             if isinstance(random, bool):
                 self.quaternion = Rotation.random()
             else:
-                self.quaternion = Rotation.random(random_state=random)
+                self.quaternion = Rotation.random(random_state=random)  # pylint: disable=unexpected-keyword-arg
         elif isinstance(eulers, np.ndarray) and eulers.shape == (3,):  # based on given Euler angles
             self.quaternion = Rotation.from_euler('ZXZ', eulers)
         elif isinstance(matrix, np.ndarray):                           # based on given rotation matrix
@@ -58,11 +60,11 @@ class Orientation:
            unitCell: plot unit cell
            cos: plot coordinate system
            annotate: annotate poles in pole figure (requires poles given)
-           plot2D: do a normal projection onto 2D plane: [down-right, up-left, right-up, left-down, 3D]; '' keeps the current setting
+           plot2D: do a normal projection onto 2D plane: [down-right, up-left, right-up, left-down, 3D];
+               '' keeps the current setting
            scale: scale of pole-figure dome over crystal
            fileName: fileName for image output (if given, image not shown)
         """
-        import matplotlib.pyplot as plt
         ax: Any
         if plot2D:
             self.plot2D = plot2D
@@ -301,9 +303,8 @@ class Orientation:
         Returns:
            equivalent orientation inside the fundamental zone
         """
-        for me in self.symmetry.equivalentQuaternions(self.quaternion):
-            if self.symmetry.inFZ(me):
-                break
+        equivalents = self.symmetry.equivalentQuaternions(self.quaternion)
+        me = next((q for q in equivalents if self.symmetry.inFZ(q)), equivalents[-1])
         return Orientation(quaternion=me, symmetry=self.symmetry.lattice)
 
     # @}
@@ -330,19 +331,16 @@ class Orientation:
         if self.symmetry != other.symmetry:
             raise TypeError('disorientation between different symmetry classes not supported yet.')
         misQ = self.quaternion.inv()*other.quaternion
-        mySymQs = self.symmetry.symmetryQuats() if sst else self.symmetry.symmetryQuats()[:1] # take all or only first sym operation
+        # all or only the first own symmetry operation; all of the other
+        mySymQs = self.symmetry.symmetryQuats() if sst else self.symmetry.symmetryQuats()[:1]
         otherSymQs = other.symmetry.symmetryQuats()
-        for i, sA in enumerate(mySymQs):  # if not in SST: only one sA
-            for j, sB in enumerate(otherSymQs):  # changes always
-                candidate = sA.inv()*misQ*sB
-                for k, theQ in enumerate((candidate.inv(), candidate)):
-                    breaker = self.symmetry.inFZ(theQ) and (not sst or other.symmetry.inDisorientationSST(theQ))
-                    if breaker:
-                        break
-                if breaker:
-                    break
-            if breaker:
-                break
+        candidates = ((i, j, k, theQ) for i, sA in enumerate(mySymQs) for j, sB in enumerate(otherSymQs)
+                      for k, theQ in enumerate(((sA.inv()*misQ*sB).inv(), sA.inv()*misQ*sB)))
+        found = next((c for c in candidates
+                      if self.symmetry.inFZ(c[3]) and (not sst or other.symmetry.inDisorientationSST(c[3]))), None)
+        if found is None:
+            raise ValueError('No equivalent misorientation lies in the fundamental zone.')
+        i, j, k, theQ = found
         return (Orientation(quaternion=theQ, symmetry=self.symmetry.lattice),
                 # disorientation, own sym, other sym, self-->other: True, self<--other: False
                 i, j, k == 1)
@@ -360,17 +358,12 @@ class Orientation:
         Returns:
           vector of axis; index of the used symmetry operation
         """
-        if sst:  # Pole requested to be within SST.
-            # test all symmetric equivalent quaternions
-            for i, q in enumerate(self.symmetry.equivalentQuaternions(self.quaternion)):
-                # align crystal direction to axis
-                pole = q.inv().apply(axis)
-                if self.symmetry.inSST(pole, proper):
-                    break                                                # found SST version
-        else:
-            # align crystal direction to axis
-            pole = self.quaternion.inv().apply(axis)
-        return (pole, i if sst else 0)
+        if not sst:  # align crystal direction to axis
+            return self.quaternion.inv().apply(axis), 0
+        # all symmetric equivalents; the first in the SST, else the last
+        poles = [q.inv().apply(axis) for q in self.symmetry.equivalentQuaternions(self.quaternion)]
+        i = next((i for i, pole in enumerate(poles) if self.symmetry.inSST(pole, proper)), len(poles)-1)
+        return poles[i], i
 
 
     def ipfColor(self, axis: Any, proper: bool = False) -> np.ndarray:

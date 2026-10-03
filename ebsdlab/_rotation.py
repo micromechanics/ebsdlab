@@ -1,4 +1,4 @@
-"""Ronvention adapters around :mod:`scipy.spatial.transform`."""
+"""Convention adapters around :mod:`scipy.spatial.transform`."""
 
 import warnings
 import numpy as np

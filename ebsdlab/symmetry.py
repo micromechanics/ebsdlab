@@ -476,7 +476,7 @@ class Symmetry:
         # have to return color array
         if color:
             if np.any(inSST):
-                theComponentsNorm = (theComponents / np.linalg.norm(theComponents, axis=0))
+                theComponentsNorm = theComponents / np.linalg.norm(theComponents, axis=0)
                 # smoothen color ramps
                 rgb = np.power(np.abs(theComponentsNorm), 0.5)
                 if rgb.ndim > 1:
@@ -616,4 +616,3 @@ def showOrSave(fileName: str = '', show: bool = True) -> None:
         plt.close()
     elif show:
         plt.show()
-

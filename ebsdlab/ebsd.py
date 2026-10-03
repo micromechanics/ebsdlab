@@ -1,19 +1,19 @@
-# Class to allow for read EBSD data
+"""EBSD class: read, analyze and plot EBSD maps"""
 import math
 import time
 from pathlib import Path
 from typing import Any
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.ndimage as ndi
-from matplotlib import colors
+from matplotlib import colormaps, colors
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.font_manager import FontProperties
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from scipy.interpolate import griddata
 from scipy.spatial.transform import Rotation
 from . import fileIO
 from ._rotation import asBungeEulers
-from .orientation import Orientation
 from .symmetry import Symmetry, showOrSave
 
 
@@ -40,6 +40,14 @@ class EBSD:
         self.phaseID: np.ndarray   = np.empty(0)
         self.semSignal: np.ndarray = np.empty(0)
         self.fit: np.ndarray       = np.empty(0)
+        # only some formats: Oxford band contrast/slope, bands, error, reliability index; OIM grain ID
+        self.bc: np.ndarray        = np.empty(0)
+        self.bs: np.ndarray        = np.empty(0)
+        self.bands: np.ndarray     = np.empty(0)
+        self.error: np.ndarray     = np.empty(0)
+        self.ri: np.ndarray        = np.empty(0)
+        self.grainID: np.ndarray   = np.empty(0)
+        self.kam: np.ndarray       = np.empty(0)  # set by calcKAM
         self.width     = 0.0
         self.height    = 0.0
         self.ratio     = 0.0
@@ -56,7 +64,7 @@ class EBSD:
         startTime        = time.time()
         self.scanUnit    = 'um'
         self.sym: list[Symmetry] = []  # loaders add phase 1, 2, ...
-        self._gridIndex: np.ndarray | None = None  # set by _setGrid for unordered or partial maps
+        self._gridIndex: np.ndarray | None = None  # set by setGrid for unordered or partial maps
 
         # read input file header and parse it
         self.fileName = str(fileName)
@@ -133,8 +141,7 @@ class EBSD:
         startTime = time.time()
         # create a special cmap palette with blacK as value for bad-numbers
         if cmap is None:
-            cmap = cm.Spectral
-            cmap.set_bad('k', 1.0)
+            cmap = colormaps['Spectral'].with_extremes(bad='k')
         z, self.imageExtent = self._image(vector, widthPixel, interpolationType)
         z = z.astype(float)
         mask, _ = self._image(~self.mask, widthPixel, interpolationType)
@@ -187,7 +194,7 @@ class EBSD:
         rgbs = np.zeros((3, self.nPoints), dtype=float)
         for phase, sym in enumerate(self.sym):
             points = shown[self.phaseID[shown] == phase]
-            if not sym.lattice or not len(points):
+            if not sym.lattice or not points.size:
                 continue
             flags = np.zeros(len(points), dtype=bool)
             rgbsPhase = np.zeros((3, len(points)), dtype=float)
@@ -270,7 +277,7 @@ class EBSD:
         Returns:
            index of the point whose orientation is drawn
         """
-        iClose      = int(self._nearestIndex(x, y))
+        iClose      = int(self.nearestIndex(x, y))
         iQuaternion = self.quaternions[iClose]
         sym = self.sym[self.phaseID[iClose]]
         ax.autoscale(False)  # the overlay must not change the map limits
@@ -321,9 +328,6 @@ class EBSD:
         Returns:
            scale bar artist
         """
-        from matplotlib.font_manager import FontProperties
-        from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
-
         if barLength is None:
             # visible area of the last image; the whole map before the first plot
             xLo, xHi, yHi, yLo = self.imageExtent if self.image.size else (0, self.width, self.height, 0)
@@ -360,18 +364,14 @@ class EBSD:
         startTime = time.time()
         fig, ax = plt.subplots()
         maxColor = tuple(np.array(colors.hex2color(color))*0.5)
+        axis = np.array(axis, dtype=float)/np.linalg.norm(axis)
+        xs, ys = [], []  # poles of all phases
         for phase, sym in enumerate(self.sym):
             if not sym.lattice:
                 continue
-            oHelp = Orientation(eulers=np.array([0., 0., 0.]), symmetry=sym.lattice)
-            axis = np.array(axis, dtype=float)
-            axis /= np.linalg.norm(axis)
-            mask = self.mask & self.vMask & (self.phaseID == phase)
-            xs, ys = [], []
-            for q in oHelp.symmetry.equivalentQuaternions(oHelp.quaternion):
-                conjAxis = q.apply(axis)
-                direction = self.quaternions.apply(conjAxis)
-                direction = direction[mask]  # filter mask
+            quaternions = self.quaternions[self.mask & self.vMask & (self.phaseID == phase)]
+            for q in sym.equivalentQuaternions(Rotation.identity()):
+                direction = quaternions.apply(q.apply(axis))
                 # upper hemisphere: toward the viewer above the sample; Y down in the plot
                 direction = direction[direction[:, 2] < 0]
                 xs.append(direction[:, 0]/(1.-direction[:, 2]))
@@ -492,19 +492,14 @@ class EBSD:
         return self.x0 + col*self.stepSizeX + even*self.xOffset, self.y0 + (2*pair+even)*self.stepSizeY
 
 
-    def calcKAM(self, layers: int = 1) -> None:
-        """calculate Kerner Average Misorientation in DEGREES (because user focused)
-
-        Args:
-           layers: number of neighboring layers used for KAM (more: slower)
-        """
+    def calcKAM(self) -> None:
+        """calculate Kerner Average Misorientation in DEGREES (because user focused) from the nearest neighbors"""
         startTime = time.time()
         neighbors = self.neighbors()
-        assert neighbors is not None
         angles = np.full(neighbors.shape, np.nan)
         for phase, sym in enumerate(self.sym):
             points = np.flatnonzero(self.phaseID == phase)
-            if not sym.lattice or not len(points):
+            if not sym.lattice or not points.size:
                 continue
             symQ = sym.symmetryQuats()
             for iNeighbor in range(neighbors.shape[1]):
@@ -519,19 +514,15 @@ class EBSD:
         return
 
 
-    def neighbors(self, idx: int | None = None, layers: int = 1) -> np.ndarray | None:
-        """identify neighboring indexes
+    def neighbors(self, idx: int | None = None) -> np.ndarray:
+        """identify the nearest neighboring indexes
 
         Args:
            idx: index to find [if None: calculate all]
-           layers: number of neighboring layers
 
         Returns:
          array of neighbors; invalid points have a value=-10
         """
-        if layers != 1:
-            print('number of layers not implemented')
-            return None
         i        = np.arange(self.nPoints) if idx is None else np.atleast_1d(idx)
         period   = self.nColsOdd + self.nColsEven
         pair, j  = np.divmod(i, period)
@@ -585,7 +576,7 @@ class EBSD:
         return self.xy()[1]
 
 
-    def _setGrid(self, x: np.ndarray, y: np.ndarray) -> None:
+    def setGrid(self, x: np.ndarray, y: np.ndarray) -> None:
         """Derive grid parameters from the coordinates; the coordinates themselves are not stored.
         If the points are unordered, partial (e.g. partition exports) or a single row, self._gridIndex is the grid
         position of each point; __init__ then places all per-point data onto the full grid.
@@ -673,10 +664,10 @@ class EBSD:
             xBlock, yBlock = self.stepSizeX*self.vMaskEvery, self.stepSizeY*self.vMaskEvery
             xAxis          = xLo + (np.floor((xAxis-xLo)/xBlock)+0.5)*xBlock
             yAxis          = yLo + (np.floor((yAxis-yLo)/yBlock)+0.5)*yBlock
-        return values[self._nearestIndex(xAxis[None, :], yAxis[:, None])], extent
+        return values[self.nearestIndex(xAxis[None, :], yAxis[:, None])], extent
 
 
-    def _nearestIndex(self, x: Any, y: Any) -> np.ndarray:
+    def nearestIndex(self, x: Any, y: Any) -> np.ndarray:
         """Index of the grid point closest to x, y: row from y, then column within that row from x
 
         Args:

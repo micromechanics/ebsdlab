@@ -1,8 +1,10 @@
-# Read and write EBSD files: loaders fill an EBSD instance, writeANG writes one
-#
-# Conventions (sample frame, crystal frame, vendor frames): docs/source/conventions.rst
+"""Read and write EBSD files: loaders fill an EBSD instance, writeANG writes one
+
+Conventions (sample frame, crystal frame, vendor frames): docs/source/conventions.rst
+"""
 
 from __future__ import annotations
+import itertools
 import math
 import os
 import re
@@ -131,13 +133,10 @@ def loadANG(ebsd: EBSD, fileName: str = '') -> None:
         ebsd.fileName = fileName
     print('Load .ang file: ', ebsd.fileName)
     keys = ['MaterialName', 'LatticeConstants', 'WorkingDistance', 'SEMVoltage', 'GRID:', 'Symmetry']
-    fileHandle = open(ebsd.fileName)
+    with open(ebsd.fileName, encoding='utf-8', errors='replace') as fileHandle:  # header; loadtxt reads the data
+        headerLines = list(itertools.takewhile(lambda line: line.startswith('#'), fileHandle))
     keyValues: list[Any] = [''] * len(keys)  # actual values
-    headerLines = []
-    for line in fileHandle:
-        if not line.startswith('#'):  # first data line; loadtxt reads the data
-            break
-        headerLines.append(line)
+    for line in headerLines:
         for key in keys:
             searchTerm = '# '+key
             if searchTerm == line[0:len(searchTerm)]:
@@ -153,7 +152,6 @@ def loadANG(ebsd: EBSD, fileName: str = '') -> None:
                 break
     ebsd.meta = dict(list(zip(keys, keyValues)))
     ebsd.sym  = tslSymmetries(headerLines)
-    fileHandle.close()
     # read data
     data           = np.loadtxt(ebsd.fileName)
     ebsd.phi1      = data[:, 0].astype(float)
@@ -166,7 +164,7 @@ def loadANG(ebsd: EBSD, fileName: str = '') -> None:
     ebsd.semSignal = data[:, 8].astype(np.uint8)
     ebsd.fit       = data[:, 9].astype(float)
     # do coordinates
-    ebsd._setGrid(data[:, 3], data[:, 4])
+    ebsd.setGrid(data[:, 3], data[:, 4])
     ebsd.width     = max(data[:, 3])
     ebsd.height    = max(data[:, 4])
     del data
@@ -184,13 +182,10 @@ def loadTXT(ebsd: EBSD, fileName: str = '', update: bool = False) -> None:
     print('Load .txt file:', fileName)
     if not fileName:
         fileName = ebsd.fileName
-    fileHandle = open(fileName)
+    with open(fileName, encoding='utf-8', errors='replace') as fileHandle:
+        headerLines = list(itertools.takewhile(lambda line: line.startswith('#'), fileHandle))
     foundKeys: dict[str, int] = {}
-    headerLines = []
-    for line in fileHandle:
-        if line[0] != '#':
-            break
-        headerLines.append(line)
+    for line in headerLines:
         parts = line.split()
         if len(parts) < 2:
             continue
@@ -208,7 +203,7 @@ def loadTXT(ebsd: EBSD, fileName: str = '', update: bool = False) -> None:
     print('   Reading file of size ', data.shape, '  this can take a bit...')
     if update:  # e.g. a partition of the loaded map: only its points stay visible
         x, y   = data[:, foundKeys['x,'] - 1], data[:, foundKeys['x,'] - 0]
-        idx    = ebsd._nearestIndex(x, y)
+        idx    = ebsd.nearestIndex(x, y)
         xs, ys = ebsd.xy(idx)
         onMap  = (np.abs(xs-x) < ebsd.stepSizeX/10) & (np.abs(ys-y) < ebsd.stepSizeY/10)
         if not onMap.all():
@@ -230,7 +225,7 @@ def loadTXT(ebsd: EBSD, fileName: str = '', update: bool = False) -> None:
         if 'sem' in foundKeys:
             ebsd.semSignal[idx] = data[:, foundKeys['sem'] - 1]
         if 'Grain' in foundKeys:
-            if not hasattr(ebsd, 'grainID'):
+            if not ebsd.grainID.size:
                 ebsd.grainID = np.full(ebsd.nPoints, -1)
             ebsd.grainID[idx] = data[:, foundKeys['Grain'] - 1]
         # stepSizeX, width, height etc do not change
@@ -256,7 +251,7 @@ def loadTXT(ebsd: EBSD, fileName: str = '', update: bool = False) -> None:
         ebsd.mask   = np.ones_like(x, dtype=bool)
         ebsd.width  = max(x)
         ebsd.height = max(y)
-        ebsd._setGrid(x, y)
+        ebsd.setGrid(x, y)
     fileHandle.close()
     print('Duration loadTXT: ', int(np.round(time.time()-startTime)), 'sec')
     return
@@ -305,7 +300,8 @@ def loadOSC(ebsd: EBSD, fileName: str = '') -> None:
     ebsd.phi  = data[:, 1].astype(np.float16)
     ebsd.phi2 = data[:, 2].astype(np.float16)
     # scale image-quality to float16; by design, the scaled IQ is used everywhere, also by writeANG
-    iqScale   = 10.0**max(0, math.ceil(math.log10(max(float(data[:, 5].max()), 1.0)/float(np.finfo(np.float16).max))))
+    float16Max = float(np.finfo(np.float16).max)  # pylint: disable=no-member
+    iqScale   = 10.0**max(0, math.ceil(math.log10(max(float(data[:, 5].max()), 1.0)/float16Max)))
     ebsd.iq   = (data[:, 5]/iqScale).astype(np.float16)
     ebsd.meta['iqScale'] = iqScale
     ebsd.ci        = data[:, 6].astype(np.float16)
@@ -315,7 +311,7 @@ def loadOSC(ebsd: EBSD, fileName: str = '') -> None:
     ebsd.fit       = data[:, 9].astype(np.float16)  # Fit
     ebsd.width     = float(max(data[:, 3]))
     ebsd.height    = float(max(data[:, 4]))
-    ebsd._setGrid(data[:, 3].astype(float), data[:, 4].astype(float))
+    ebsd.setGrid(data[:, 3].astype(float), data[:, 4].astype(float))
     del data
     return
 
@@ -332,9 +328,10 @@ def loadCRC(ebsd: EBSD, fileName: str = '') -> None:
     print('Load .crc file: ', ebsd.fileName, cprFileName)
     if not os.path.exists(cprFileName):
         print('CPR file does not exist')
-    cprFile = open(cprFileName)
+    with open(cprFileName, encoding='utf-8', errors='replace') as cprFile:
+        cprLines = cprFile.read().splitlines()
     cprData: dict[str, dict[str, Any]] = {}
-    for line in cprFile:
+    for line in cprLines:
         line = line.strip()
         if not line:
             continue
@@ -347,7 +344,6 @@ def loadCRC(ebsd: EBSD, fileName: str = '') -> None:
             cprData[title][key.lower()] = float(value)
         except ValueError:
             cprData[title][key.lower()] = value.lower()
-    cprFile.close()
     # print "META DATA",cprData
     if 'griddistx' not in cprData['job']:
         raise ValueError(f'CRC file is not a grid map (JobMode={cprData["general"].get("jobmode")}); '
@@ -399,7 +395,7 @@ def loadCRC(ebsd: EBSD, fileName: str = '') -> None:
     xCoordinates = np.arange(xcells)*ebsd.stepSizeX
     yCoordinates = np.arange(ycells)*ebsd.stepSizeY
     x, y         = np.meshgrid(xCoordinates, yCoordinates)
-    ebsd._setGrid(x.flatten(), y.flatten())
+    ebsd.setGrid(x.flatten(), y.flatten())
 
     # read data from crcFile: packed little-endian records
     recordType = [('phase', 'u1'), ('phi1', '<f4'), ('phi', '<f4'), ('phi2', '<f4'), ('ci', '<f4'),
@@ -440,6 +436,8 @@ def loadCTF(ebsd: EBSD, fileName: str = '') -> None:
             break
         elif len(parts) > 1:
             header[parts[0]] = parts[1]
+    else:
+        raise ValueError('CTF file has no data: the column line "Phase X Y ..." is missing')
     if header.get('JobMode') != 'Grid':
         raise ValueError(f'CTF file is not a grid map (JobMode={header.get("JobMode")}); only grid maps are supported')
     ebsd.stepSizeX, ebsd.stepSizeY = float(header['XStep']), float(header['YStep'])
@@ -450,7 +448,7 @@ def loadCTF(ebsd: EBSD, fileName: str = '') -> None:
     ebsd.width, ebsd.height        = xcells*ebsd.stepSizeX, ycells*ebsd.stepSizeY
     # coordinates from the header: the X and Y columns are rounded
     x, y = np.meshgrid(np.arange(xcells)*ebsd.stepSizeX, np.arange(ycells)*ebsd.stepSizeY)
-    ebsd._setGrid(x.flatten(), y.flatten())
+    ebsd.setGrid(x.flatten(), y.flatten())
     # columns: Phase X Y Bands Error Euler1 Euler2 Euler3 MAD BC BS
     ebsd.phaseID                   = data[:, 0].astype(np.uint8)
     ebsd.bands, ebsd.error         = data[:, 3].astype(np.uint8), data[:, 4].astype(np.uint8)
@@ -486,14 +484,13 @@ def loadVoid(ebsd: EBSD, rotation: str) -> None:
               '| distribution:', distrib, '| numberPerAxis:', numPerAxis)
     else:
         phi1, phi, phi2 = 0, 0, 0
-    if distrib < 0.001:
-        distrib = 0.001
+    distrib = max(distrib, 0.001)
     ebsd.sym.append(Symmetry('cubic'))
     ebsd.stepSizeX = 1.
     numDataPoints  = int(numPerAxis**2)
     coordinates    = np.arange(numPerAxis)*ebsd.stepSizeX
     x, y           = np.meshgrid(coordinates, coordinates)
-    ebsd._setGrid(x.flatten(), y.flatten())
+    ebsd.setGrid(x.flatten(), y.flatten())
     ebsd.phaseID   = np.ones((numDataPoints), dtype=np.uint8)
     ebsd.phi1      = np.zeros((numDataPoints), dtype=float)+phi1 + \
                         np.random.normal(loc=0, scale=distrib, size=numDataPoints)
@@ -514,29 +511,28 @@ def writeANG(ebsd: EBSD, fileName: str) -> None:
        fileName: file name
     """
     startTime = time.time()
-    fileOut = open(fileName, 'w')
-    # one block per phase: TSL code of the crystal system (0: not identified) and its default unit cell
-    for phase, sym in enumerate(ebsd.sym[1:], start=1):
-        cell      = GROUPS[sym.lattice]['cell'] if sym.lattice else {}
-        constants = (*cell['default_ratio'], *cell['default_angles']) if cell else (1, 1, 1, 90, 90, 90)
-        fileOut.write(f'# Phase {phase}\n# MaterialName {sym.lattice or "void"}\n# Formula \n'
-                      f'# Symmetry {TSL_CODES.get(sym.lattice, 0)}\n'
-                      f'# LatticeConstants {" ".join(f"{i:.3f}" for i in constants)}\n')
-        # ponytail: hkl families only for cubic (fcc); readers like mtex ignore them, add per lattice if OIM needs
-        families = ['1 1 1', '2 0 0', '2 2 0', '3 1 1'] if sym.lattice == 'cubic' else []
-        fileOut.write(f'# NumberFamilies {len(families)}\n')
-        fileOut.writelines(f'# hklFamilies {hkl} 1 0.0\n' for hkl in families)
-        fileOut.write('#\n')
-    if ebsd.meta.get('iqScale', 1) > 1:
-        fileOut.write(f'# IQ divided by {ebsd.meta["iqScale"]:g} (ebsdlab float16 range)\n#\n')
-    fileOut.write(f'# GRID: {ebsd.grid}\n#\n')
-    xs, ys = ebsd.xy()
-    phaseID = ebsd.phaseID if ebsd.phaseID.max() > 1 else np.zeros_like(ebsd.phaseID)
-    for i in range(ebsd.nPoints):
-        phi1, phi, phi2 = tuple(asBungeEulers(EDAX_SAMPLE.inv() * ebsd.quaternions[i]))
-        fileOut.write(f' {phi1:8.5f} {phi:8.5f} {phi2:8.5f} {xs[i]:12.5f} {ys[i]:12.5f} {ebsd.iq[i]:8.3f}'
-                      f' {ebsd.ci[i]:6.3f} {phaseID[i]:2d} {int(ebsd.semSignal[i]):6d} {ebsd.fit[i]:7.3f}\n')
-    fileOut.close()
+    with open(fileName, 'w', encoding='utf-8') as fileOut:
+        # one block per phase: TSL code of the crystal system (0: not identified) and its default unit cell
+        for phase, sym in enumerate(ebsd.sym[1:], start=1):
+            cell      = GROUPS[sym.lattice]['cell'] if sym.lattice else {}
+            constants = (*cell['default_ratio'], *cell['default_angles']) if cell else (1, 1, 1, 90, 90, 90)
+            fileOut.write(f'# Phase {phase}\n# MaterialName {sym.lattice or "void"}\n# Formula \n'
+                          f'# Symmetry {TSL_CODES.get(sym.lattice, 0)}\n'
+                          f'# LatticeConstants {" ".join(f"{i:.3f}" for i in constants)}\n')
+            # ponytail: hkl families only for cubic (fcc); readers like mtex ignore them, add per lattice if OIM needs
+            families = ['1 1 1', '2 0 0', '2 2 0', '3 1 1'] if sym.lattice == 'cubic' else []
+            fileOut.write(f'# NumberFamilies {len(families)}\n')
+            fileOut.writelines(f'# hklFamilies {hkl} 1 0.0\n' for hkl in families)
+            fileOut.write('#\n')
+        if ebsd.meta.get('iqScale', 1) > 1:
+            fileOut.write(f'# IQ divided by {ebsd.meta["iqScale"]:g} (ebsdlab float16 range)\n#\n')
+        fileOut.write(f'# GRID: {ebsd.grid}\n#\n')
+        xs, ys = ebsd.xy()
+        phaseID = ebsd.phaseID if ebsd.phaseID.max() > 1 else np.zeros_like(ebsd.phaseID)
+        for i in range(ebsd.nPoints):
+            phi1, phi, phi2 = tuple(asBungeEulers(EDAX_SAMPLE.inv() * ebsd.quaternions[i]))
+            fileOut.write(f' {phi1:8.5f} {phi:8.5f} {phi2:8.5f} {xs[i]:12.5f} {ys[i]:12.5f} {ebsd.iq[i]:8.3f}'
+                          f' {ebsd.ci[i]:6.3f} {phaseID[i]:2d} {int(ebsd.semSignal[i]):6d} {ebsd.fit[i]:7.3f}\n')
     print('Duration writeANG: ', int(np.round(time.time()-startTime)), 'sec')
     return
 

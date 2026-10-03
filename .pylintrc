@@ -104,10 +104,6 @@ recursive=no
 # source root.
 source-roots=
 
-# When enabled, pylint would attempt to guess common misconfiguration and emit
-# user-friendly hints instead of false-positive error messages.
-suggestion-mode=yes
-
 # Allow loading of arbitrary C extensions. Extensions are imported into the
 # active Python interpreter and may run arbitrary code.
 unsafe-load-any-extension=no
@@ -293,7 +289,7 @@ ignored-parents=
 max-args=11  # Fix
 
 # Maximum number of attributes for a class (see R0902).
-max-attributes=32  # Fix
+max-attributes=40  # Fix
 
 # Maximum number of boolean expressions in an if statement (see R0916).
 max-bool-expr=5
@@ -572,7 +568,7 @@ contextmanager-decorators=contextlib.contextmanager
 # List of members which are set dynamically and missed by pylint inference
 # system, and so shouldn't trigger E1101 when accessed. Python regular
 # expressions are accepted.
-generated-members=
+generated-members=connect  # PySide6 signals, e.g. button.clicked.connect
 
 # Tells whether to warn about missing members when the owner of the attribute
 # is inferred to be None.
