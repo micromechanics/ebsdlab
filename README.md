@@ -160,20 +160,35 @@ $ python -m pylint ebsdlab
 ## Issues
 Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may also be documented in this repository when they need to stay alongside the code.
 
-### Group: check orientations
-- ensure that all doc image-files from ebsdlab come from builds;
-- add more checks to compare other file outputs with those from references/Orix...
-- Euler angles of all formats are used as stored. Hex/trigonal crystal frame: `.ctf`, `.crc` use X||a*, ebsdlab and
-  `.ang`, `.osc` X||a (30° about c, fix: q*Rz(-30°)). Specimen frame: MTEX rotates by 180° about [1-10] (`.ang`
-  setting 2) or Z (`.ctf`, `.crc`) into the map frame; ebsdlab does not, so PFs and RD/TD IPFs differ by vendor.
+### Group: Update documentation
+- think which doc pages are out-of-date: move things around. Go away from two pages doing the same (symmetry and 7 shapes; OIM-comparison and with upublications), think about order, structure, ...
+- Next: compare the examples of `docs/source/howto/comparison-gallery.rst` one by one with their sources.
+  - `Ti_ZrN.ctf` vs. Kennedy et al. 2021, Fig. 10c: same field and map orientation (ZrN particle overlaps without
+    flip). The paper's "IPF ND" matches ebsdlab IPF along X (RD), not Z; α-Ti also needs the 30° hex frame (X||a*):
+    color distance ND 185 → RD 151 → RD with q*Rz(±30°) 94; ZrN ND 175 → RD 118. Paper maps are noise-reduced.
+    Open: why X; the AZtec header says "Euler angles refer to Sample Coordinate system (CS0)". The 30° crystal
+    turn is now applied by the loader.
+  - `W_TKD.ctf` is published: J. Wang et al., J. Mater. Res. 37 (2022), doi:10.1557/s43578-022-00733-9 (local:
+    `~/Downloads/s43578-022-00733-9.pdf`), Fig. 1: IPF RD, TD, ND of the 2000 nm wedge indent at 0.05 1/s, 17 nm
+    step (original name `2000nm_005s_2TKD.ctf`). Compare all three directions; update the gallery ("no published
+    image") and `tests/DataFiles/README.md`. Note: measured with Bruker e-FlashHD and plotted with MTEX, so it
+    is a Bruker `.ctf`, not an Oxford reference.
+  - then `Eclogite.crc` and the MTEX examples.
+- `Orientation` class: still uses its own frame (ND out of plane, `plot2D='up-left'`); align it with
+  `docs/source/conventions.rst`. Then update `docs/source/orientation.rst` and the end of `verification.rst`, which
+  still describe the OIM layout (RD up), and point them to the conventions page.
 
 ### Group: implement new features
 - Implement:grain reconstruction
+- Loader for pymicro HDF5: Zenodo 12801865 (doi:10.5281/zenodo.12801865, CC-BY-4.0), CP-Ti grade 2 (hexagonal),
+  `ET10_7_EBSD_post_mortem.h5` (10.4 MB; `ET10_7_EBSD_post_mortem_data_XYZ.h5`, 19.7 MB) with an OIM image of the
+  same map, `ET10_7_EBSD_PM_clean_grains_OIM.tif` (0.9 MB), for comparison. The pymicro frame is unknown; it
+  needs a row in `docs/source/conventions.rst`.
+- Bruker `.ctf`: `docs/source/conventions.rst` has no Bruker row; every `.ctf` is treated as Oxford. Find a Bruker
+  (Esprit) file with a figure made by Esprit; `W_TKD.ctf` cannot decide it alone, its paper plotted with MTEX.
 - `plotPF` distribution: replace the pixel Gaussian on the stereographic image by a pole density function: von
   Mises-Fisher kernel (width in degrees) on the sphere, equal-area grid, normalized to mrd, then projected. Fixes
   rim/area distortion and gives comparable units; a step towards ODFs, which smooth in orientation space.
-- `plotPF`: `xs, ys = [], []` is inside the phase loop, so a multi-phase pole figure shows only the last phase;
-  move it above the loop.
 
 ### Group: GUI
 - Goal: extremely simple; only key parameters visible, everything else in the generated .py code.

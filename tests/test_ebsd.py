@@ -168,3 +168,17 @@ def test_ebsd_bicrystal_pf():
     e = EBSD(str(DATA_DIR/'EBSD.ang'))
     e.cropVMask(ymin=35)
     return e.plotPF([1, 0, 0], points=True, show=False)
+
+
+@pytest.mark.mpl_image_compare(savefig_kwargs={'bbox_inches': 'tight'})
+def test_ebsd_hexagonal_edax_ipf():
+    """EDAX hexagonal crystal frame: IPF RD equals OIM's TD in Maj et al., Fig. 4f (map turned by 90° there)."""
+    e = EBSD(str(DATA_DIR/'AZ31B.ang'))
+    return e.plotIPF('RD', show=False)
+
+
+@pytest.mark.mpl_image_compare(savefig_kwargs={'bbox_inches': 'tight'})
+def test_ebsd_trigonal_oxford_ipf():
+    """Oxford 30° crystal turn and trigonal standard triangle: compare to Channel 5 in Checa et al. 2022, Fig. 6a."""
+    e = EBSD(str(DATA_DIR/'Catillopecten_Fig6a.crc'))
+    return e.plotIPF('ND', show=False)
