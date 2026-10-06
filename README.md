@@ -116,9 +116,6 @@ conventions, verification against OIM and MTEX, design scope, and development (t
 Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may
 also be documented in this repository when they need to stay alongside the code.
 
-- Bruker `.ctf`: `docs/source/conventions.rst` has no Bruker row; every `.ctf` is treated as Oxford. Find a Bruker
-  (Esprit) file with a figure made by Esprit; `W_TKD.ctf` cannot decide it alone, its paper plotted with MTEX.
-
 
 ## Notes
 ### Group: implement new features
