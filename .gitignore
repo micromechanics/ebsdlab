@@ -151,3 +151,6 @@ static
 docs/ebsd.ang
 tests/baseline_review/
 tests/mtex_cache/
+
+# copyrighted reference figures, kept locally for comparison, never committed
+docs/reference_local/

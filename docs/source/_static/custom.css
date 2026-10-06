@@ -1,23 +1,16 @@
-/* Increase font size for Jupyter Sphinx code input areas */
-.jp-InputArea-editor .CodeMirror-code,
-.jp-InputArea-editor .CodeMirror-line {
-    font-size: 120%; /* Or any other size like 1.1em, 14pt, etc. */
+
+/* Wider content: the theme's 45rem makes figures and comparison tables small */
+div.document div.documentwrapper {
+    max-width: 80rem;
+}
+div.document table.docutils img,
+div.document table.docutils td img {
+    width: 100%;
+    height: auto;
 }
 
-/* Increase font size for Jupyter Sphinx code output areas (text-based) */
-.jp-OutputArea-output pre {
-    font-size: 120%; /* Or any other size */
+/* Page contents sidebar: only the code reference page shows it (see api.rst) */
+#right_sidebar,
+#show_right_sidebar {
+    display: none;
 }
-
-/* You might also want to target the general code blocks if needed */
-div.highlight pre, /* General Sphinx code blocks */
-.highlight .go, /* Jupyter output prompt */
-.highlight .gt /* Jupyter traceback */
-{
-    font-size: 120%;
-}
-
-/* Hide the right "Page contents" sidebar */
-/* #right_sidebar {
-    display: none !important;
-} */

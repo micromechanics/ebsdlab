@@ -9,6 +9,7 @@
 | `Catillopecten.crc` + `.cpr` | Oxford binary `.crc` | Calcite (trigonal), Aragonite (orthorhombic) | 0.4 MB | loads |
 | `Catillopecten_Fig6a.crc` + `.cpr` | Oxford binary `.crc`, 38709 points | Calcite (trigonal) | 1.0 MB | loads |
 | `Eclogite.crc` + `.cpr` | Oxford binary `.crc`, 6208 points | Garnet (cubic), Omphacite, Hornblende, Clinozoisite (monoclinic), Albite (triclinic), Quartz (trigonal) | 0.2 MB | loads |
+| `Eclogite_Fig5.crc` + `.cpr` | Oxford binary `.crc`, 115 x 85 | as `Eclogite.crc`, plus Rutile (tetragonal) and Glaucophane (monoclinic) | 0.2 MB | loads |
 | `Ti_ZrN.ctf` | Oxford text `.ctf`, 100 x 100 | Ti alpha (hexagonal), Ti beta (cubic, BCC), ZrN (cubic, FCC) | 0.6 MB | loads |
 | `W_TKD.ctf` | Oxford text `.ctf`, TKD, 600 x 399 | Tungsten (cubic, BCC), 58 % not indexed | 13 MB | loads |
 
@@ -33,6 +34,8 @@
 - Original name: `2000nm_005s_2TKD.ctf`
 - Source: transmission Kikuchi diffraction map of a notched tungsten crystal
 - Authors: Jin Wang, IMD-1, FZ Jülich
+- Paper: J. Wang et al., J. Mater. Res. 37 (2022) 3645, doi:10.1557/s43578-022-00733-9 (CC-BY-4.0), Fig. 1 shows
+  this map (IPF RD, TD, ND)
 - License: MIT, as ebsdlab
 
 ### `Catillopecten.crc`, `Catillopecten.cpr`, `Catillopecten_Fig6a.crc`, `Catillopecten_Fig6a.cpr`
@@ -46,8 +49,11 @@
 - Authors: A. G. Checa, C. Salas, F. M. Varela-Feria, A. B. Rodríguez-Navarro, C. Grenier, G. M. Kamenev, E. M. Harper
 - License: CC-BY-4.0
 
-### `Eclogite.crc`, `Eclogite.cpr`
-- Original names: `stagescanS63.crc` / `.cpr`
+### `Eclogite.crc`, `Eclogite.cpr`, `Eclogite_Fig5.crc`, `Eclogite_Fig5.cpr`
+- Original names: `stagescanS63.crc` / `.cpr`; `Eclogite_Fig5`: `GrainMapS68.crc` / `.cpr` (8.9 MB, 2.5 um),
+  every 4th row and column kept (10 um); the EDX count columns are removed
+- Paper: McNamara et al., J. Struct. Geol. (2023) 105033, doi:10.1016/j.jsg.2023.105033, CC-BY-4.0; Fig. 5 shows
+  `GrainMapS68`
 - Source: Zenodo, "Punta Telcio Zermatt-Saas Eclogite Mineral Data - Chemistry and Crystallography"
 - URL: https://zenodo.org/records/7837199, DOI 10.5281/zenodo.7837199
 - Authors: D. D. McNamara, J. Wheeler, M. Pearce, D. Prior
@@ -59,6 +65,8 @@
   (WAAM) Ti-6Al-4V by ZrN and TiN inoculation'"
 - URL: https://zenodo.org/records/5708619, DOI 10.5281/zenodo.5708619
 - Authors: J. Kennedy, A. Davis, A. Caballero
+- Paper: J. Kennedy et al., Addit. Manuf. 40 (2021) 101928, doi:10.1016/j.addma.2021.101928; Fig. 10c shows this map.
+  The accepted manuscript (Cranfield, hdl:1826/16408) is CC-BY-NC-ND-4.0; its Fig. 10 is in the docs, unchanged
 - License: CC-BY-4.0
 
 ## MTEX examples, not included

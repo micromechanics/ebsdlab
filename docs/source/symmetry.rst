@@ -4,27 +4,17 @@
 Tutorial for Symmetry
 =====================
 
-The :class:`~ebsdlab.symmetry.Symmetry` class uses lattice names:
-``cubic``, ``hexagonal``, ``tetragonal``, ``orthorhombic``, ``monoclinic``,
-``triclinic``, and ``trigonal`` (also accepted as ``rhombohedral``). Internally,
-SciPy represents their proper rotational symmetries by the point-group codes
-``O``, ``D6``, ``D4``, ``D2``, ``C2``, ``C1``, and ``D3``. These SciPy groups are rotation groups, not crystallographic
-space groups.
+The :class:`~ebsdlab.symmetry.Symmetry` class takes a lattice name: ``cubic``, ``hexagonal``, ``tetragonal``,
+``orthorhombic``, ``monoclinic``, ``triclinic`` or ``trigonal`` (alias ``rhombohedral``). It holds the proper
+rotations only, not the space group.
 
-This example teaches the fundamentals of crystallography and shows how to determine if a vector lies within the standard stereographic triangle (SST) and retrieve its corresponding color for an Inverse Pole Figure (IPF) map.
-
-The image shows a standard stereographic projection.
+The standard stereographic triangle (SST) decides the IPF color of a direction.
 
 .. image:: /_static/stereographicProjection.png
 
-Let's pick point-1 in the middle of the standard stereographic triangle: (2, 1, 3) using floats. We normalize it by dividing by its length and retrieve whether it is inside the SST and the color. We obtain that the point is inside and that the color is a very very light blue hue.
-
-Let's pick point-2 somewhere else: (1, 2, 3). We normalize it by dividing by its length
-and retrieve whether it is inside the SST and the color. We obtain that the point is outside and that the color is black, which is the default as the point is not inside the SST.
-
-Please note, the point (2, 1, -3) is similarly inside the SST, as it is the backside projection of the sphere onto the plane.
-
-At the end, we retrieve the standard triangle as an image.
+- point 1 = (2, 1, 3) is inside the SST: very light blue
+- point 2 = (1, 2, 3) is outside: black
+- (2, 1, -3) is also inside, as it is the backside of the sphere
 
 .. jupyter-execute::
 
@@ -46,23 +36,41 @@ At the end, we retrieve the standard triangle as an image.
 Unit cells
 ----------
 
-``unitCell()`` returns the edges of a centered cell for every supported lattice.
-Its defaults are chosen to make the lattice shape clear in plots;
-they are not material-specific lattice parameters, as those differ from one material to the next. Cubic cells use
-``a = b = c = 1``; tetragonal and hexagonal cells use ``a = b = 1`` and
-``c = 1.5``; orthorhombic cells use ``a = 1``, ``b = 1.25``, and ``c = 1.5``.
-Monoclinic and triclinic defaults use the latter unequal lengths, while
-trigonal uses a rhombohedral cell with equal unit-length edges.
-Positive lattice constants can be supplied when required:
+``unitCell()`` returns the edges of a centered cell. The defaults only make the shape clear: cubic
+``a = b = c = 1``, tetragonal and hexagonal ``c = 1.5``, orthorhombic ``a, b, c = 1, 1.25, 1.5``. Pass material
+values when needed (angles in degrees; monoclinic is unique-``b``):
 
 .. code-block:: python
 
     cell = Symmetry('orthorhombic').unitCell(a=2.0, b=3.0, c=4.0)
 
-For non-orthogonal cells, pass conventional angles in degrees as ``alpha``,
-``beta``, and ``gamma``. Monoclinic cells use the unique-``b`` setting
-(``alpha = gamma = 90``); rhombohedral trigonal cells require equal lengths
-and equal angles.
+The seven crystal systems
+-------------------------
 
-For detailed API documentation, refer to
-:class:`~ebsdlab.symmetry.Symmetry`.
+.. jupyter-execute::
+
+   import matplotlib.pyplot as plt
+   from ebsdlab.symmetry import Symmetry
+
+   lattices = (
+       "cubic", "hexagonal", "tetragonal", "orthorhombic",
+       "monoclinic", "triclinic", "trigonal",
+   )
+   cells = {lattice: Symmetry(lattice).unitCell() for lattice in lattices}
+   limit = max(abs(cell[:, :]).max() for cell in cells.values()) * 1.1
+
+   figure = plt.figure(figsize=(12, 6))
+   for index, lattice in enumerate(lattices, start=1):
+       axes = figure.add_subplot(2, 4, index, projection="3d")
+       for edge in cells[lattice]:
+           axes.plot(*edge.reshape(2, 3).T, color="C0", linewidth=2)
+
+       axes.set_title(lattice.capitalize(), fontsize=20)
+       axes.set_box_aspect((1, 1, 1))
+       axes.set_xlim(-limit, limit)
+       axes.set_ylim(-limit, limit)
+       axes.set_zlim(-limit, limit)
+       axes.set_axis_off()
+       axes.view_init(elev=20, azim=35)
+
+   figure.tight_layout()

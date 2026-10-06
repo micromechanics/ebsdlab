@@ -1,5 +1,9 @@
-API Reference
-=============
+Code reference
+==============
+
+.. raw:: html
+
+   <style>#right_sidebar, #show_right_sidebar {display: block;}</style>
 
 .. automodule:: ebsdlab.ebsd
    :members:

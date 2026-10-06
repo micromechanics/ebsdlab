@@ -3,8 +3,7 @@
 Tutorial on Rotations
 =====================
 
-This tutorial introduces the fundamentals of rotations and uses the **Orientation** class as it includes the material symmetry (e.g. cubic crystal) and the rotation (e.g., rotated by 45 degrees).
-
+The ``Orientation`` class combines a material symmetry (e.g. cubic) with a rotation.
 
 Example: Specific orientations
 ------------------------------
@@ -99,45 +98,25 @@ Procedure:
     o.plot()
     o.plot([1,0,0])
 
-Example: Loop through all equivalent directions
------------------------------------------------
+Example: Compare to OIM Software
+--------------------------------
 
-This example demonstrates how to iterate through all symmetrically equivalent directions and calculate them.
-
-  1. We create a crystal axis (e.g., [1,1,0]) that we are interested in.
-  2. We create an orientation that we are interested in (we print it to verify it)
-  3. We use a helping orientation which we use to iterate over its quaternions / directions (we print it for verification).
-  4. Obtain an equivalent crystal axis of the helper-orientation
-  5. Calculate the sample direction by transforming using orientation 'o'.
-  6. Print the equivalent crystal axis and its transformed version.
+OIM software shows the 2D projection with the Rolling Direction (RD) upward. Note that many textbooks have the RD downward. The Normal Direction (ND) always points out of the plane; the Transverse Direction (TD) changes depending on RD.
 
 .. jupyter-execute::
 
-    import numpy as np
-    from ebsdlab.orientation import Orientation
+   import numpy as np
+   from ebsdlab.orientation import Orientation
+   o = Orientation(eulers=np.radians([0,10,10]), symmetry="cubic")
+   o.plot( )
+   o.plot(plot2D='up-left')
+   o.plot(poles=[1,0,0], plot2D='up-left', scale=1.5)
+   o.plot(poles=[1,1,1])
+   o.toScreen(equivalent=False)
 
-    crystal_axis = np.array([1, 1, 0])
-    o     = Orientation(eulers=np.radians([0,45,0]), symmetry="cubic")
-    print('Orientation:\n',o,'\n')
+Which outputs HKL and UVW as integers:
+    - Euler angles: [ 0. 10. 10.]
+    - HKL [ 1  5 32]
+    - UVW [ 5 -1  0]
 
-    oHelp = Orientation(eulers=np.array([0.,0.,0.]), symmetry="cubic")
-    print('Help Orientation:\n',oHelp,'\n')
-
-    for q_sym in oHelp.symmetry.symmetryQuats():
-        equivalent_crystal_axis = q_sym.apply(crystal_axis)
-        sample_direction = o.quaternion.apply(equivalent_crystal_axis)
-        print(f"Crystal Axis: {str(np.round(equivalent_crystal_axis, 3)):<13}, Sample Direction: {np.round(sample_direction, 3)}")
-
-
-Example: Calculate average orientation
---------------------------------------
-
-.. jupyter-execute::
-
-    import numpy as np
-    from ebsdlab.orientation import Orientation
-    a = Orientation(eulers=np.radians([0,45,0]), symmetry='cubic')
-    b = Orientation(eulers=np.radians([0,0,0]),  symmetry='cubic')
-    c = Orientation(eulers=np.radians([0,15,0]), symmetry='cubic')
-    avg = Orientation.average([a,b,c])
-    print("Rotation angles",avg.asEulers(degrees=True))
+The HKL and UVW vectors are rounded to integers, hence they are approximate values. They are convenient for quick inspection but not precise.

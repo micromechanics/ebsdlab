@@ -66,10 +66,14 @@ You can install `ebsdlab` using Conda or pip. `ebsdlab` supports Python >=3.10.
 
          $ pip install git+https://github.com/micromechanics/ebsdlab.git
 
-After that, the package can be imported and used in Python codes as
+Graphical user interface
+------------------------
 
-```python
->>> from ebsdlab import EBSD
->>> emap = EBSD("tests/DataFiles/EBSD.ang")
->>> emap.plot(emap.ci)
-```
+Install the optional GUI dependency and start the application:
+
+.. code-block:: console
+
+   $ pip install 'ebsdlab[gui]'
+   $ ebsdlab-gui
+
+Next: :ref:`quickstart`.

@@ -19,14 +19,14 @@ Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in s
 EBSD-Inverse Pole Figure (IPF) of polycrystalline Copper with corresponding Pole Figure
 <table>
   <tr>
-    <td><img src="docs/source/_static/ebsd_py_ND.png" alt="EBSD of polycrystalline Copper"></td>
-    <td width="65%"><img src="docs/source/_static/ebsd_py_PF100.png" alt="Pole figure"></td>
+    <td><img src="tests/baseline/test_ebsd_ipf.png" alt="EBSD of polycrystalline Copper"></td>
+    <td width="65%"><img src="tests/baseline/test_ebsd_pf.png" alt="Pole figure"></td>
   </tr>
 </table>
 
 
 ## Installation
-You can install `ebsdlab` using Conda or pip.
+You can install `ebsdlab` (Python >=3.10) using Conda or pip.
 
 <details>
 <summary><strong>Using Conda</strong></summary>
@@ -92,13 +92,10 @@ $ ebsdlab-gui
 ```
 
 ## Documentation
-[Documentation on github pages](https://micromechanics.github.io/ebsdlab/)
+[Documentation on github pages](https://micromechanics.github.io/ebsdlab/): quickstart, user guide,
+conventions, verification against OIM and MTEX, design scope, and development (tests, static checks).
 
 ## FAQ
-### What features I do not envision:
-  - include all crystal symmetries (materials science can mostly live with few)
-  - other Euler angle definitions than Bunge; materials science does not use those
-
 ### Future features
   - improve cleaning
   - grain identification methods
@@ -113,71 +110,37 @@ $ ebsdlab-gui
  - help with cleaning and grain identification
 
 
-## Design scope
-`ebsdlab` analyzes already indexed EBSD orientation data for known phases. It is
-not intended to index raw Kikuchi patterns, identify phases from diffraction
-patterns, or simulate EBSD patterns.
-
-Accordingly, it models the rotational crystal symmetry required for orientation
-analysis, not complete atomistic crystal structures. Atomic basis positions,
-lattice centering, structure factors, and translational space-group operations
-such as glide planes and screw axes are out of scope. These details are  not important
-for orientation maps, IPF colors, misorientation, KAM, or pole-figure analysis of a known phase.
-
-## Phases
-Every point has a `phaseID` (`uint8`):
-- `0`: not identified; `emap.sym[0]` is an empty `Symmetry()`
-- `1, 2, ...`: phases; `emap.sym[k]` is the symmetry of phase `k`
-
-IPF maps, pole figures, unit-cell overlays and KAM use the symmetry of each point's phase; KAM ignores
-neighbors of another phase.
-
-## Requirements
-`ebsdlab` supports Python >=3.10.
-
-
-## Development
-Use the local `.venv/` when it has been prepared for this repository, or create an environment with Python >=3.10 and install the development requirements.
-
-```console
-$ python -m pip install -r requirements-dev.txt
-$ python -m pip install .
-```
-
-Run the test suite from the repository root:
-
-```console
-$ pytest --mpl --mpl-baseline-path=tests/baseline
-```
-
-Static checks are configured for:
-
-```console
-$ python -m mypy ebsdlab
-$ python -m pylint ebsdlab
-```
-
 ## Issues
 Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may also be documented in this repository when they need to stay alongside the code.
 
-### Group: Update documentation
-- think which doc pages are out-of-date: move things around. Go away from two pages doing the same (symmetry and 7 shapes; OIM-comparison and with upublications), think about order, structure, ...
-- Next: compare the examples of `docs/source/howto/comparison-gallery.rst` one by one with their sources.
-  - `Ti_ZrN.ctf` vs. Kennedy et al. 2021, Fig. 10c: same field and map orientation (ZrN particle overlaps without
-    flip). The paper's "IPF ND" matches ebsdlab IPF along X (RD), not Z; α-Ti also needs the 30° hex frame (X||a*):
-    color distance ND 185 → RD 151 → RD with q*Rz(±30°) 94; ZrN ND 175 → RD 118. Paper maps are noise-reduced.
-    Open: why X; the AZtec header says "Euler angles refer to Sample Coordinate system (CS0)". The 30° crystal
-    turn is now applied by the loader.
-  - `W_TKD.ctf` is published: J. Wang et al., J. Mater. Res. 37 (2022), doi:10.1557/s43578-022-00733-9 (local:
-    `~/Downloads/s43578-022-00733-9.pdf`), Fig. 1: IPF RD, TD, ND of the 2000 nm wedge indent at 0.05 1/s, 17 nm
-    step (original name `2000nm_005s_2TKD.ctf`). Compare all three directions; update the gallery ("no published
-    image") and `tests/DataFiles/README.md`. Note: measured with Bruker e-FlashHD and plotted with MTEX, so it
-    is a Bruker `.ctf`, not an Oxford reference.
-  - then `Eclogite.crc` and the MTEX examples.
-- `Orientation` class: still uses its own frame (ND out of plane, `plot2D='up-left'`); align it with
-  `docs/source/conventions.rst`. Then update `docs/source/orientation.rst` and the end of `verification.rst`, which
-  still describe the OIM layout (RD up), and point them to the conventions page.
+Open:
 
+### Group: Update documentation
+- Next: compare the examples of the published-images page `docs/source/comparison.rst` one by one with their
+  sources, one to one; where they do not match, state the rotation or flip needed. Data and reference figures are
+  settled; local copies of the papers and original data are in `docs/reference_local/` (git-ignored, see its
+  `README.txt`).
+  - Matching without rotation or flip: `AZ31B.ang` (Maj et al., Fig. 4f), `W_TKD.ctf` (Wang et al. 2022, Fig. 1;
+    Bruker `.ctf` plotted with MTEX, not an Oxford reference), `Eclogite_Fig5.crc` (McNamara et al. 2023, Fig. 5,
+    phase map), `Catillopecten.crc` (Checa et al. 2022, Supplementary Fig. S6b).
+  - `Ti_ZrN.ctf` vs. Kennedy et al. 2021, Fig. 10c: same field and map orientation (ZrN particle overlaps without
+    flip). The paper's "IPF ND" matches ebsdlab IPF along X (RD), not Z; α-Ti also needs the 30° hex frame
+    (X||a*): color distance ND 185 → RD 151 → RD with q*Rz(±30°) 94; ZrN ND 175 → RD 118. Paper maps are
+    noise-reduced. Open: why X; the AZtec header says "Euler angles refer to Sample Coordinate system (CS0)". The
+    30° crystal turn is now applied by the loader. The docs page shows Fig. 10 of the accepted manuscript
+    (CC-BY-NC-ND-4.0, squeezed vertically to about 40 %).
+  - Not one to one yet: MTEX example 1 (`DC06_2uniax.ang`) and the copper comparison do not match. Then the other
+    MTEX examples.
+- Comparison with orix (`docs/source/comparisonOrix.rst`): add a resource comparison. Take one large file, measure
+  run time, memory and disk space in ebsdlab, then the same in orix.
+- `Orientation` class: still uses its own frame (ND out of plane, `plot2D='up-left'`); align it with
+  `docs/source/conventions.rst`. Then update `docs/source/orientation.rst`, which
+  still describes the OIM layout (RD up) in its last section, and point it to the conventions page.
+- "Calcite aerial, Catillopecten_Fig6a.crc" example is left-right mirrored: Reason unclear. Same paper, same
+  Channel 5: `Catillopecten.crc` vs. Fig. S6b is not mirrored; Fig. S5a (phase map of Fig. 6a) is mirrored like
+  Fig. 6a. Hint: the authors turned Fig. 6a, not a loader issue.
+
+## Notes
 ### Group: implement new features
 - Implement:grain reconstruction
 - Loader for pymicro HDF5: Zenodo 12801865 (doi:10.5281/zenodo.12801865, CC-BY-4.0), CP-Ti grade 2 (hexagonal),
