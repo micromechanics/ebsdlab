@@ -44,6 +44,51 @@ Advantages of orix
 - **Speed on large data:** uses numba and dask.
 
 
+Resource usage
+--------------
+
+A one-time comparison on 2026-10-06, ebsdlab 0.0.7b1 (development version of that day) and orix 0.15.0, both with Python 3.14.4,
+numpy 2.5.3, scipy 1.18.1 and matplotlib 3.11.2, on a laptop with an AMD Ryzen 5 3500U and 14 GB memory. Each
+package is installed alone in a fresh virtual environment, and each measurement runs in a new process, three runs
+that agree within 0.1 s: load the ``.ang`` file, then plot the IPF map along Z. Peak memory is the peak resident memory of the process,
+including the imports; loaded data is the size of all arrays of the loaded map. The script is
+``docs/benchmark_orix.py``.
+
+The file is ``EBSD_deformed_I_ED.ang`` of Maj et al. (Zenodo 18668585, 190 MB), 1,593,848 points. Its hexagonal
+grid is made rectangular for the comparison, because orix cannot plot hexagonal grids: every second row is shifted
+by half a step and the last point of the other rows is dropped. The map is then distorted, but both packages
+handle the same numbers.
+
+.. list-table::
+   :header-rows: 1
+
+   * -
+     - ebsdlab
+     - orix
+   * - load
+     - 3.0 s
+     - 3.1 s
+   * - IPF map
+     - 2.8 s
+     - 4.2 s
+   * - peak memory
+     - 599 MB
+     - 1235 MB
+   * - memory after the imports
+     - 112 MB
+     - 244 MB
+   * - loaded data
+     - 96 MB
+     - 198 MB
+   * - virtual environment on disk
+     - 0.30 GB
+     - 0.59 GB
+
+Both load the map equally fast; most of the time goes into parsing the text file. ebsdlab plots the IPF map faster
+and needs half the memory and disk space: the loaded map is stored as ``float16``, and the IPF colors are computed
+from one pole per point, turned by the symmetry operations.
+
+
 Dependencies
 ------------
 

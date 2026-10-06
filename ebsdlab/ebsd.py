@@ -13,7 +13,7 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from scipy.interpolate import griddata
 from scipy.spatial.transform import Rotation
 from . import fileIO
-from ._rotation import asBungeEulers
+from ._rotation import asBungeEulers, fromBungeEulers, multiply
 from .symmetry import Symmetry, showOrSave
 
 
@@ -101,7 +101,7 @@ class EBSD:
 
         # convert into quaternions and only use that
         eulers = np.vstack((self.phi1, self.phi, self.phi2))
-        self.quaternions = Rotation.from_euler('ZXZ', eulers.T)
+        self.quaternions = fromBungeEulers(eulers.T)
         fileIO.rotateToConventions(self, suffix)
         del self.phi1
         del self.phi
@@ -188,7 +188,9 @@ class EBSD:
 
         # colors only for the points shown in the image
         if interpolationType == 'nearest':
-            shown = np.unique(self._image(np.arange(self.nPoints), widthPixel)[0])
+            shown = np.zeros(self.nPoints, dtype=bool)
+            shown[self._image(np.arange(self.nPoints), widthPixel)[0]] = True
+            shown = np.flatnonzero(shown)
         else:
             shown = np.flatnonzero(self.vMask)
         rgbs = np.zeros((3, self.nPoints), dtype=float)
@@ -198,10 +200,11 @@ class EBSD:
                 continue
             flags = np.zeros(len(points), dtype=bool)
             rgbsPhase = np.zeros((3, len(points)), dtype=float)
-            equivQuaternions = sym.equivalentQuaternions(self.quaternions[points])
-            for equivQuaternion in equivQuaternions:
-                pole = equivQuaternion.inv().apply(axis)
-                remainingFlags, remainingRgbs = sym.inSST(pole[~flags].T, color=True, proper=False)
+            # pole of the equivalent orientation q*s: (q*s)^-1 axis = s^-1 (q^-1 axis), so q^-1 axis is computed once
+            poles = self.quaternions[points].inv().apply(axis).T
+            for symmetry in sym.symmetryQuats():
+                pole = symmetry.inv().as_matrix() @ poles[:, ~flags]
+                remainingFlags, remainingRgbs = sym.inSST(pole, color=True, proper=False)
                 if len(remainingRgbs.shape) == 2:
                     rgbsPhase[:, ~flags] = remainingRgbs
                     flags[~flags]        = remainingFlags
@@ -501,10 +504,12 @@ class EBSD:
             points = np.flatnonzero(self.phaseID == phase)
             if not sym.lattice or not points.size:
                 continue
-            symQ = sym.symmetryQuats()
+            # scalar part of misQ*s for all symmetries s: dot product with (-s_x, -s_y, -s_z, s_w)
+            symQ = sym.symmetryQuats().as_quat() * [-1, -1, -1, 1]
             for iNeighbor in range(neighbors.shape[1]):
-                misQ = self.quaternions[points].inv() * self.quaternions[neighbors[points, iNeighbor]]
-                angles[points, iNeighbor] = np.min([(misQ*q).magnitude() for q in symQ], axis=0)
+                misQ = multiply(self.quaternions[points].inv(), self.quaternions[neighbors[points, iNeighbor]])
+                scalar = np.abs(misQ.as_quat() @ symQ.T).max(axis=1)
+                angles[points, iNeighbor] = 2*np.arccos(np.clip(scalar, 0., 1.))
         # -10 would index points at the end of the map
         angles[(neighbors < 0) | (self.phaseID[neighbors] != self.phaseID[:, None])] = np.nan
         angles[self.ci[neighbors] == -1.0] = np.nan

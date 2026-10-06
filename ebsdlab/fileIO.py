@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 import numpy as np
 from scipy.spatial.transform import Rotation
-from ._rotation import asBungeEulers
+from ._rotation import asBungeEulers, fromBungeEulers, multiply
 from .symmetry import GROUPS, Symmetry
 if TYPE_CHECKING:
     from .ebsd import EBSD
@@ -34,12 +34,12 @@ def rotateToConventions(ebsd: EBSD, suffix: str) -> None:
     """
     sample, crystal = FRAMES.get(suffix, (None, None))
     if sample is not None:
-        ebsd.quaternions = sample * ebsd.quaternions
+        ebsd.quaternions = multiply(sample, ebsd.quaternions)
     if crystal is not None:
         for phase, sym in enumerate(ebsd.sym):
             points = ebsd.phaseID == phase
             if sym.lattice in ('hexagonal', 'trigonal') and points.any():
-                ebsd.quaternions[points] = ebsd.quaternions[points] * crystal
+                ebsd.quaternions[points] = multiply(ebsd.quaternions[points], crystal)
 
 # The low Laue classes m-3, 6/m, 4/m, -3 use the high ones m-3m, 6/mmm, 4/mmm, -3m of their crystal system;
 #    the loaders warn when they meet one.
@@ -211,8 +211,8 @@ def loadTXT(ebsd: EBSD, fileName: str = '', update: bool = False) -> None:
         idx, data = idx[onMap], data[onMap]
         ebsd.mask[:]   = False
         ebsd.mask[idx] = True
-        ebsd.quaternions[idx] = EDAX_SAMPLE * Rotation.from_euler('ZXZ',
-                                                                  data[:, foundKeys['phi1,']-1:foundKeys['phi1,']+2])
+        eulers = data[:, foundKeys['phi1,']-1:foundKeys['phi1,']+2]
+        ebsd.quaternions[idx] = multiply(EDAX_SAMPLE, fromBungeEulers(eulers))
         if 'IQ' in foundKeys:
             ebsd.iq[idx] = data[:, foundKeys['IQ'] - 1]
         if 'CI' in foundKeys:

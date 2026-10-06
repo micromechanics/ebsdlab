@@ -114,12 +114,6 @@ conventions, verification against OIM and MTEX, design scope, and development (t
 Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may
 also be documented in this repository when they need to stay alongside the code.
 
-Open:
-
-### Group: Update documentation
-- Comparison with orix (`docs/source/comparisonOrix.rst`): add a resource comparison. Take one large file, measure
-  run time, memory and disk space in ebsdlab, then the same in orix.
-
 ## Notes
 ### Group: implement new features
 - Grain reconstruction
