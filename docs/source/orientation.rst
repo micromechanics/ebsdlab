@@ -41,10 +41,11 @@ Each example:
 Plot unit cell
 --------------
 
-Plot unit cells and pole-figures using the orientation-class:
+Plot unit cells and pole-figures using the orientation-class. The 2D view follows the :ref:`conventions`, like
+maps and pole figures: RD right, TD down, seen from above the sample.
 
     - first item is one looking for
-    - plot 2D projection with the coordinate system pointing up and left
+    - plot 2D projection of the unit cell
     - plot also the poles and add scaling
 
 .. jupyter-execute::
@@ -54,8 +55,8 @@ Plot unit cells and pole-figures using the orientation-class:
    angle = np.radians([0,55,45])
    o = Orientation(eulers=angle, symmetry="cubic")
    o.toScreen()
-   o.plot(plot2D='up-left')
-   o.plot(poles=[1,0,0], plot2D='up-left', scale=1.5)
+   o.plot()
+   o.plot(poles=[1,0,0], scale=1.5)
 
 
 
@@ -101,17 +102,19 @@ Procedure:
 Example: Compare to OIM Software
 --------------------------------
 
-OIM software shows the 2D projection with the Rolling Direction (RD) upward. Note that many textbooks have the RD downward. The Normal Direction (ND) always points out of the plane; the Transverse Direction (TD) changes depending on RD.
+OIM software shows the 2D projection with the Rolling Direction (RD) upward and the Normal Direction (ND) out of
+the plane: ``plot2D='up-left'``. Many textbooks have RD downward: ``plot2D='down-right'``. ebsdlab's own view,
+``plot2D='right-down'`` (default), is described on the :ref:`conventions` page.
 
 .. jupyter-execute::
 
    import numpy as np
    from ebsdlab.orientation import Orientation
    o = Orientation(eulers=np.radians([0,10,10]), symmetry="cubic")
-   o.plot( )
+   o.plot()
    o.plot(plot2D='up-left')
    o.plot(poles=[1,0,0], plot2D='up-left', scale=1.5)
-   o.plot(poles=[1,1,1])
+   o.plot(poles=[1,1,1], plot2D='right-down')
    o.toScreen(equivalent=False)
 
 Which outputs HKL and UVW as integers:

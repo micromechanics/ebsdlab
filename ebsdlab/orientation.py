@@ -39,7 +39,7 @@ class Orientation:
         else:
             self.quaternion = Rotation.identity()
         self.symmetry = Symmetry(symmetry)
-        self.plot2D = 'down-right'
+        self.plot2D = 'right-down'
         self.eps = 1e-6
         return
 
@@ -52,6 +52,7 @@ class Orientation:
         """Plot rotated unit-cell in 3D, and possibly the pole-figure and specific poles
 
         Projection onto 2D: cooradinate systems are given as xDirection-yDirection (z follows)
+        - right-down: [default, as maps and pole figures] RD = x = right; TD = y = down; ND = z = intoPlane
         - down-right: [default in text books] RD = x = down; TD = y = right; ND = z = outOfPlane
         - up-left: [default in OIM] RD = x = up; TD = y = left; ND = z = outOfPlane
 
@@ -60,14 +61,17 @@ class Orientation:
            unitCell: plot unit cell
            cos: plot coordinate system
            annotate: annotate poles in pole figure (requires poles given)
-           plot2D: do a normal projection onto 2D plane: [down-right, up-left, right-up, left-down, 3D];
-               '' keeps the current setting
+           plot2D: do a normal projection onto 2D plane: [right-down, down-right, up-left, right-up, left-down,
+               3D]; '' keeps the current setting
            scale: scale of pole-figure dome over crystal
            fileName: fileName for image output (if given, image not shown)
         """
         ax: Any
         if plot2D:
             self.plot2D = plot2D
+        # right-down is seen from above the sample (-Z): turned 180° about X, the side toward the viewer has z > 0
+        view = Rotation.from_rotvec([np.pi, 0, 0]) if self.plot2D == 'right-down' else Rotation.identity()
+        quaternion = view*self.quaternion
         if self.plot2D == '3D':
             fig = plt.figure()
             ax = fig.add_subplot(projection='3d')
@@ -75,10 +79,10 @@ class Orientation:
             fig, ax = plt.subplots()
 
         if unitCell:
-            for start, end, lw in self.symmetry.unitCellSegments(self.quaternion):
+            for start, end, lw in self.symmetry.unitCellSegments(quaternion):
                 self.plotLine(ax, start, end-start, color='b', lw=lw)
         if cos:
-            self.plotUnit(ax, 'RD [100]', 'TD [010]', 'ND [001]')
+            self.plotUnit(ax, 'RD [100]', 'TD [010]', 'ND [001]', view=view)
         if poles is not None:
             # plot sphere
             if self.plot2D == '3D':
@@ -97,7 +101,7 @@ class Orientation:
             poles /= np.linalg.norm(poles)
             for _, q in enumerate(oHelp.symmetry.equivalentQuaternions(oHelp.quaternion)):
                 conjAxis = q.apply(poles)  # e.g. [100]
-                direction = self.quaternion.apply(conjAxis)
+                direction = quaternion.apply(conjAxis)
                 if direction[2] < -self.eps:
                     continue  # prevent rounding errors
                 fromBase = direction+np.array([0, 0, 1])
@@ -129,7 +133,7 @@ class Orientation:
 
 
     def plotUnit(self, ax: Any, xlabel: str, ylabel: str, zlabel: str, x: float = 0, y: float = 0,
-                 z: float = 0, s: float = 1) -> None:  # unit axis
+                 z: float = 0, s: float = 1, view: Rotation | None = None) -> None:  # unit axis
         """Coordinate systems: see plotLine
 
         Args:
@@ -141,18 +145,19 @@ class Orientation:
            y: y-coordinate of origin
            z: z-coordinate of origin
            s: scale
+           view: rotation of the axes into the plotted frame [default: none]
         """
-        self.plotLine(ax, [x, y, z], [s, 0, 0], 'k', lw=3)
-        self.plotLine(ax, [x, y, z], [0, s, 0], 'k', lw=3)
-        self.plotLine(ax, [x, y, z], [0, 0, s], 'k', lw=3)
+        axes = (view or Rotation.identity()).apply(s*np.eye(3))
+        for axis in axes:
+            self.plotLine(ax, [x, y, z], axis, 'k', lw=3)
         if self.plot2D == '3D':
             ax.text(x+s,   y+0.1, z+0.1, xlabel)
             ax.text(x+0.1, y+s,   z+0.1, ylabel)
             ax.text(x+0.1, y+0.1, z+s, zlabel)
         else:
-            ax.text(*(self.project(x+s,   y, z+0.1)+(xlabel,)))
-            ax.text(*(self.project(x+0.1, y+s, z+0.1) + (ylabel, {'ha': 'right'})))
-            ax.text(*(self.project(x+0.1, y, z+s)+(zlabel,)))
+            ax.text(*(self.project(*([x, y, z] + axes[0]))+(xlabel,)))
+            ax.text(*(self.project(*([x+0.1, y, z] + axes[1]))+(ylabel, {'ha': 'right'})))
+            ax.text(*(self.project(*([x+0.1, y, z] + axes[2]))+(zlabel,)))
         return
 
 
@@ -192,6 +197,7 @@ class Orientation:
     def project(self, x: Any, y: Any, z: Any) -> tuple[np.ndarray, ...]:
         """Project 3D coordinates onto the 2D plot plane given by self.plot2D
 
+        right-down : x, y (after the 180° turn about X in plot)
         down-right : y, -x
         up-left    : -y, x
         right-up   : x,y
@@ -207,8 +213,8 @@ class Orientation:
            projected coordinates: two arrays; three for "3D"
         """
         x, y, z = np.asarray(x), np.asarray(y), np.asarray(z)
-        projections = {'down-right': (y, -x), 'up-left': (-y, x), 'right-up': (x, y), 'left-down': (-x, -y),
-                       '3D': (x, y, z)}
+        projections = {'right-down': (x, y), 'down-right': (y, -x), 'up-left': (-y, x), 'right-up': (x, y),
+                       'left-down': (-x, -y), '3D': (x, y, z)}
         if self.plot2D not in projections:
             raise ValueError(f'plot2D must be one of {', '.join(projections)}, not {self.plot2D!r}')
         return projections[self.plot2D]

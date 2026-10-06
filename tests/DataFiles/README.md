@@ -8,8 +8,7 @@
 | `AZ31B.ang` | EDAX/TSL `.ang`, square grid, 223 x 199 | AZ31B magnesium (hexagonal) | 3.9 MB | loads |
 | `Catillopecten.crc` + `.cpr` | Oxford binary `.crc` | Calcite (trigonal), Aragonite (orthorhombic) | 0.4 MB | loads |
 | `Catillopecten_Fig6a.crc` + `.cpr` | Oxford binary `.crc`, 38709 points | Calcite (trigonal) | 1.0 MB | loads |
-| `Eclogite.crc` + `.cpr` | Oxford binary `.crc`, 6208 points | Garnet (cubic), Omphacite, Hornblende, Clinozoisite (monoclinic), Albite (triclinic), Quartz (trigonal) | 0.2 MB | loads |
-| `Eclogite_Fig5.crc` + `.cpr` | Oxford binary `.crc`, 115 x 85 | as `Eclogite.crc`, plus Rutile (tetragonal) and Glaucophane (monoclinic) | 0.2 MB | loads |
+| `Eclogite_Fig5.crc` + `.cpr` | Oxford binary `.crc`, 115 x 85 | Garnet (cubic), Omphacite, Hornblende, Clinozoisite, Glaucophane (monoclinic), Albite (triclinic), Rutile (tetragonal), Quartz (trigonal) | 0.2 MB | loads |
 | `Ti_ZrN.ctf` | Oxford text `.ctf`, 100 x 100 | Ti alpha (hexagonal), Ti beta (cubic, BCC), ZrN (cubic, FCC) | 0.6 MB | loads |
 | `W_TKD.ctf` | Oxford text `.ctf`, TKD, 600 x 399 | Tungsten (cubic, BCC), 58 % not indexed | 13 MB | loads |
 
@@ -49,9 +48,9 @@
 - Authors: A. G. Checa, C. Salas, F. M. Varela-Feria, A. B. Rodríguez-Navarro, C. Grenier, G. M. Kamenev, E. M. Harper
 - License: CC-BY-4.0
 
-### `Eclogite.crc`, `Eclogite.cpr`, `Eclogite_Fig5.crc`, `Eclogite_Fig5.cpr`
-- Original names: `stagescanS63.crc` / `.cpr`; `Eclogite_Fig5`: `GrainMapS68.crc` / `.cpr` (8.9 MB, 2.5 um),
-  every 4th row and column kept (10 um); the EDX count columns are removed
+### `Eclogite_Fig5.crc`, `Eclogite_Fig5.cpr`
+- Original names: `GrainMapS68.crc` / `.cpr` (8.9 MB, 2.5 um); every 4th row and column kept (10 um); the EDX
+  count columns are removed
 - Paper: McNamara et al., J. Struct. Geol. (2023) 105033, doi:10.1016/j.jsg.2023.105033, CC-BY-4.0; Fig. 5 shows
   `GrainMapS68`
 - Source: Zenodo, "Punta Telcio Zermatt-Saas Eclogite Mineral Data - Chemistry and Crystallography"

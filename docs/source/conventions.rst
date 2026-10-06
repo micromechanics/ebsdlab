@@ -67,6 +67,9 @@ How the conventions were checked
   for 180° about [1-10] (:ref:`verification`). As a consequence, OIM's RD is ebsdlab's -TD.
 - **EDAX, crystal frame:** the IPF colors of ``AZ31B.ang`` match OIM's in Maj et al., Fig. 4f; turning the
   crystals by 30° about c swaps blue and green (:ref:`comparison-gallery`).
-- **Oxford, both frames:** ``Catillopecten_Fig6a.crc`` and a second map of the same Zenodo record (Site 14)
-  against Oxford Channel 5 in Checa et al. 2022, Fig. 6: the calcite prisms drawn in the maps match without a
-  sample rotation, and the {104} poles match after turning the crystal by 30° about c (:ref:`comparison-gallery`).
+- **Oxford, sample frame:** ``Catillopecten.crc`` (Checa et al. 2022, Fig. S6b, Channel 5), ``Eclogite_Fig5.crc``
+  (McNamara et al. 2023, Fig. 5, Channel 5) and ``Ti_ZrN.ctf`` (Kennedy et al. 2021, Fig. 10c, AZtec) match their
+  published maps without rotation or flip (:ref:`comparison-gallery`).
+- **Oxford, crystal frame:** the α-Ti colors of ``Ti_ZrN.ctf`` match AZtec's only with the crystal turned by 30°
+  about c: mean color distance 85, without the turn 151. The {104} poles that Channel 5 draws for
+  ``Catillopecten_Fig6a.crc`` in Checa et al. 2022, Fig. 6, agree.

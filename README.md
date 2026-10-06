@@ -111,38 +111,18 @@ conventions, verification against OIM and MTEX, design scope, and development (t
 
 
 ## Issues
-Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may also be documented in this repository when they need to stay alongside the code.
+Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may
+also be documented in this repository when they need to stay alongside the code.
 
 Open:
 
 ### Group: Update documentation
-- Next: compare the examples of the published-images page `docs/source/comparison.rst` one by one with their
-  sources, one to one; where they do not match, state the rotation or flip needed. Data and reference figures are
-  settled; local copies of the papers and original data are in `docs/reference_local/` (git-ignored, see its
-  `README.txt`).
-  - Matching without rotation or flip: `AZ31B.ang` (Maj et al., Fig. 4f), `W_TKD.ctf` (Wang et al. 2022, Fig. 1;
-    Bruker `.ctf` plotted with MTEX, not an Oxford reference), `Eclogite_Fig5.crc` (McNamara et al. 2023, Fig. 5,
-    phase map), `Catillopecten.crc` (Checa et al. 2022, Supplementary Fig. S6b).
-  - `Ti_ZrN.ctf` vs. Kennedy et al. 2021, Fig. 10c: same field and map orientation (ZrN particle overlaps without
-    flip). The paper's "IPF ND" matches ebsdlab IPF along X (RD), not Z; α-Ti also needs the 30° hex frame
-    (X||a*): color distance ND 185 → RD 151 → RD with q*Rz(±30°) 94; ZrN ND 175 → RD 118. Paper maps are
-    noise-reduced. Open: why X; the AZtec header says "Euler angles refer to Sample Coordinate system (CS0)". The
-    30° crystal turn is now applied by the loader. The docs page shows Fig. 10 of the accepted manuscript
-    (CC-BY-NC-ND-4.0, squeezed vertically to about 40 %).
-  - Not one to one yet: MTEX example 1 (`DC06_2uniax.ang`) and the copper comparison do not match. Then the other
-    MTEX examples.
 - Comparison with orix (`docs/source/comparisonOrix.rst`): add a resource comparison. Take one large file, measure
   run time, memory and disk space in ebsdlab, then the same in orix.
-- `Orientation` class: still uses its own frame (ND out of plane, `plot2D='up-left'`); align it with
-  `docs/source/conventions.rst`. Then update `docs/source/orientation.rst`, which
-  still describes the OIM layout (RD up) in its last section, and point it to the conventions page.
-- "Calcite aerial, Catillopecten_Fig6a.crc" example is left-right mirrored: Reason unclear. Same paper, same
-  Channel 5: `Catillopecten.crc` vs. Fig. S6b is not mirrored; Fig. S5a (phase map of Fig. 6a) is mirrored like
-  Fig. 6a. Hint: the authors turned Fig. 6a, not a loader issue.
 
 ## Notes
 ### Group: implement new features
-- Implement:grain reconstruction
+- Grain reconstruction
 - Loader for pymicro HDF5: Zenodo 12801865 (doi:10.5281/zenodo.12801865, CC-BY-4.0), CP-Ti grade 2 (hexagonal),
   `ET10_7_EBSD_post_mortem.h5` (10.4 MB; `ET10_7_EBSD_post_mortem_data_XYZ.h5`, 19.7 MB) with an OIM image of the
   same map, `ET10_7_EBSD_PM_clean_grains_OIM.tif` (0.9 MB), for comparison. The pymicro frame is unknown; it
@@ -157,10 +137,7 @@ Open:
 - Goal: extremely simple; only key parameters visible, everything else in the generated .py code.
 - Flow: load once (info line) → process (min CI, crop to toolbar view, KAM on demand, cached) → plot; every change
   replots, no button. One 'Show' list: IPF (+direction), phase, IQ, CI, KAM, PF (+axis).
-- Have one button at the end, render in full detail (omitting automatic vmask)
-- Defaults instead of options: scale bar on, axes off, unit-cell size from map (possibly 3 settings), automatic preview vmask for large
-  maps. Formats from `fileIO.LOADERS` (adds `.ctf`).
+- One button at the end: render in full detail (omitting the automatic vmask).
+- Defaults instead of options: scale bar on, axes off, unit-cell size from map (possibly 3 settings), automatic
+  preview vmask for large maps. Formats from `fileIO.LOADERS` (adds `.ctf`).
 - Generated code: ample comments, full map, ends with `plt.savefig(...)`.
-
-
-

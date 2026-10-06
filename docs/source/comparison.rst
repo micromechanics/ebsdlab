@@ -22,9 +22,10 @@ example.
    from PIL import Image
    from ebsdlab.ebsd import EBSD
 
-   def compare(ebsd, url, title, direction='ND', turns=0, scaleBar=None):
+   def compare(ebsd, url, title, direction='ND', turns=0, mirror=False, scaleBar=None):
        """Plot the ebsdlab IPF map (left) next to the image of the data source (right).
        url: local file of the source image; turns: quarter turns of the ebsdlab map, counterclockwise
+       mirror: mirror the ebsdlab map left-right after turning it
        scaleBar: length of the scale bar in µm, None for no scale bar
        """
        ebsd.plotIPF(direction, show=False)
@@ -32,10 +33,12 @@ example.
        figure, (left, right) = plt.subplots(1, 2, figsize=(16, 7))
        xLo, xHi, yHi, yLo = ebsd.imageExtent
        width, height = (yHi-yLo, xHi-xLo) if turns % 2 else (xHi-xLo, yHi-yLo)
-       left.imshow(np.rot90(ebsd.image, turns), extent=(0, width, height, 0))
+       image = np.rot90(ebsd.image, turns)
+       left.imshow(np.fliplr(image) if mirror else image, extent=(0, width, height, 0))
        if scaleBar is not None:
            ebsd.addScaleBarOverlay(left, scaleBar)
-       left.set_title(f'ebsdlab: IPF {direction}' + (f', turned by {90*turns}°' if turns else ''))
+       left.set_title(f'ebsdlab: IPF {direction}' + (f', turned by {90*turns}°' if turns else '')
+                      + (', mirrored' if mirror else ''))
        right.set_title(title)
        right.imshow(np.asarray(Image.open(url)))
        for axes in (left, right):
@@ -87,7 +90,9 @@ Calcite aerial, ``Catillopecten_Fig6a.crc``
 The map of Fig. 6a/b of the same paper (Site 8), cropped from the figure and stored in ``docs/source/_static``.
 The paper colors along Z0 with its own key: 001 red, 120 green, 210 blue. The prism that Channel 5 draws in
 Fig. 6b and the pole figures below the map check the frames of Oxford files: they match with the Euler angles as
-stored and, for the {104} poles, the crystal turned by 30° about c.
+stored and, for the {104} poles, the crystal turned by 30° about c. The paper's map is mirrored left-right;
+probably the authors flipped it to compare it with the other panels of Fig. 6 (``Catillopecten.crc`` in Fig. S6b
+is not mirrored).
 
 .. jupyter-execute::
 
@@ -135,9 +140,11 @@ unchanged, of the accepted manuscript (Cranfield University repository,
 `hdl:1826/16408 <https://dspace.lib.cranfield.ac.uk/handle/1826/16408>`_), CC-BY-NC-ND-4.0, stored in
 ``docs/source/_static``.
 
-The ZrN particle sits at the same place as in ebsdlab and the grains around it have the same shapes. The colors do
-not match yet, see the open issues in the README. The paper's β-Ti map is reconstructed from the α phase and has no
-counterpart in the file.
+The ZrN particle sits at the same place as in ebsdlab and the grains around it have the same shapes. In the paper,
+ND is the build direction of the wall and the maps are ND-TD cross sections, so the paper's IPF ND colors along a
+direction in the plane of the map: ebsdlab's X. ebsdlab therefore plots IPF RD, and the colors match for both
+phases; ebsdlab's ND, the normal of the section, is the paper's welding direction. The paper's β-Ti map is
+reconstructed from the α phase and has no counterpart in the file.
 
 .. jupyter-execute::
 
@@ -145,10 +152,10 @@ counterpart in the file.
    figure, axes = plt.subplots(1, 2, figsize=(14, 7))
    for axis, phase, name in zip(axes, (1, 3), ('α-Ti', 'ZrN')):
        titanium.mask = titanium.phaseID == phase
-       titanium.plotIPF('ND', show=False)
+       titanium.plotIPF('RD', show=False)
        plt.close()
        axis.imshow(titanium.image)
-       axis.set_title(f'ebsdlab: IPF ND, {name}')
+       axis.set_title(f'ebsdlab: IPF RD, {name}')
        axis.set_axis_off()
    figure.tight_layout()
 
@@ -227,22 +234,28 @@ them when its documentation is rebuilt; the cached copy keeps the image that was
 Iron, square grid, ``DC06_2uniax.ang``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-MTEX page `GND <https://mtex-toolbox.github.io/GND.html>`_: IPF along Y with grain boundaries.
+MTEX page `GND <https://mtex-toolbox.github.io/GND.html>`_: IPF along Y with grain boundaries. MTEX plots this map
+with X up and Y to the left, Z out of the screen, as its axes symbol shows: seen from the other side than ebsdlab,
+the ebsdlab map turned by 90° counterclockwise and then mirrored left-right. The sample frames are the same, so
+MTEX's IPF Y has the colors of ebsdlab's TD.
 
 .. jupyter-execute::
 
    compare(EBSD(mtexFile('DC06_2uniax.ang')), mtexFile('GND_01.png', url=MTEX_FIGURES), 'MTEX: IPF Y',
-           direction='TD')
+           direction='TD', turns=1, mirror=True)
 
 Copper, ``copper.osc``
 ~~~~~~~~~~~~~~~~~~~~~~
 
-MTEX page `EBSD2ODF <https://mtex-toolbox.github.io/EBSD2ODF.html>`_: IPF map.
+MTEX page `EBSD2ODF <https://mtex-toolbox.github.io/EBSD2ODF.html>`_: IPF map along Z. The MTEX map is the ebsdlab
+map flipped vertically (turned by 180° and mirrored), with the same colors, as for ``twins.ctf``: a 180° turn about
+x flips the map, and Z and -Z have the same color for cubic crystals. MTEX has several plotting conventions (which
+axes point right and up); probably one of them causes the flip.
 
 .. jupyter-execute::
 
    compare(EBSD(mtexFile('copper.osc'), symmetry='cubic'), mtexFile('EBSD2ODF_01.png', url=MTEX_FIGURES),
-           'MTEX: IPF')
+           'MTEX: IPF', turns=2, mirror=True)
 
 Olivine and other minerals, ``olivineopticalmap.ang``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -268,9 +281,12 @@ MTEX page `TiBetaReconstruction <https://mtex-toolbox.github.io/TiBetaReconstruc
 Magnesium twins, ``twins.ctf``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-MTEX page `EBSDGrid <https://mtex-toolbox.github.io/EBSDGrid.html>`_: orientation map; MTEX rotates the Euler
-angles by 180° about x when loading.
+MTEX page `EBSDGrid <https://mtex-toolbox.github.io/EBSDGrid.html>`_: orientation map; MTEX rotates the Euler angles
+by 180° about x when loading. The MTEX map is the ebsdlab map flipped vertically (turned by 180° and mirrored), with
+the same colors: a 180° turn about x turns Y and Z around, which flips the map, and Z and -Z have the same color in
+the hexagonal Laue group.
 
 .. jupyter-execute::
 
-   compare(EBSD(mtexFile('twins.ctf')), mtexFile('EBSDGrid_01.png', url=MTEX_FIGURES), 'MTEX: orientation map')
+   compare(EBSD(mtexFile('twins.ctf')), mtexFile('EBSDGrid_01.png', url=MTEX_FIGURES), 'MTEX: orientation map',
+           turns=2, mirror=True)
