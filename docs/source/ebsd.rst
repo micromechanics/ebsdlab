@@ -128,5 +128,5 @@ them and the number of points.
 
    from ebsdlab.ebsd import EBSD
    e = EBSD('void318.|125.|219.6|0.2|10')
-   e.plotPF(size=5)
+   e.plotPF(width=10)
    e.plotPF(points=True)

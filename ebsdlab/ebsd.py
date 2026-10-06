@@ -344,22 +344,27 @@ class EBSD:
         return scaleBar
 
 
-    def plotPF(self, axis: Any = (1, 0, 0), points: bool = False, fileName: str = '', color: str = '#1f77b4',
-               alpha: float = 1.0, show: bool = True, density: int = 256, size: int = 2,
-               vmin: float = 0.0, vmax: float = 1.0) -> Any:
+    def plotPF(self, axis: Any = (1, 0, 0), points: bool = False,  # pylint: disable=too-many-locals
+               fileName: str = '', color: str = '#1f77b4', alpha: float = 1.0, show: bool = True,
+               density: int = 256, size: int = 2, vmin: float = 0.0, vmax: float | None = None,
+               width: float = 5.0) -> Any:
         """plot pole figure, oriented as the map: X right, Y down, seen from above the sample (upper hemisphere -Z)
+
+        The distribution is a pole density function in multiples of a random distribution (mrd): the poles are
+        binned on an equal-area grid, smoothed with a von Mises-Fisher kernel on the sphere and then projected.
 
         Args:
           axis:    axis to plot: default: axis=1,0,0
-          points:  plot individual points [default], or plot distribution
+          points:  plot individual points, or plot distribution [default]
           fileName: if given, save to file
           color:   plot color
           alpha:   alpha transparency
           show:    show figure [default], False for subsequent plotting
-          density: how many points to plot on the distribution
-          size:    points: point size; distribution: amount of smoothing: higher more smoothing
-          vmin:    minimum value plotted, used as cut-off for transparency
-          vmax:    max. used in color coding, allows to focus on minor texture
+          density: distribution: size of the image in pixels
+          size:    points: point size
+          vmin:    distribution: lower values [mrd] are transparent
+          vmax:    distribution: maximum of the color scale [mrd]; default: maximum of the data
+          width:   distribution: half width of the kernel in degrees
 
         Returns:
           matplotlib figure
@@ -368,46 +373,62 @@ class EBSD:
         fig, ax = plt.subplots()
         maxColor = tuple(np.array(colors.hex2color(color))*0.5)
         axis = np.array(axis, dtype=float)/np.linalg.norm(axis)
-        xs, ys = [], []  # poles of all phases
+        directions = []  # poles of all phases
         for phase, sym in enumerate(self.sym):
             if not sym.lattice:
                 continue
             quaternions = self.quaternions[self.mask & self.vMask & (self.phaseID == phase)]
             for q in sym.equivalentQuaternions(Rotation.identity()):
-                direction = quaternions.apply(q.apply(axis))
-                # upper hemisphere: toward the viewer above the sample; Y down in the plot
-                direction = direction[direction[:, 2] < 0]
-                xs.append(direction[:, 0]/(1.-direction[:, 2]))
-                ys.append(-direction[:, 1]/(1.-direction[:, 2]))
-        x, y = np.concatenate(xs), np.concatenate(ys)
+                directions.append(quaternions.apply(q.apply(axis)))
+        direction = np.concatenate(directions)
         if points:
+            # upper hemisphere: toward the viewer above the sample; Y down in the plot
+            direction = direction[direction[:, 2] < 0]
+            x, y = direction[:, 0]/(1.-direction[:, 2]), -direction[:, 1]/(1.-direction[:, 2])
             ax.plot(x, y, '.', color=maxColor, markersize=size)
             ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
                     np.sin(np.linspace(0, 2*np.pi, 100)), 'k-')
             ax.plot([-1, 1], [0, 0], 'k--')
             ax.plot([0, 0], [-1, 1], 'k--')
         else:
+            # pole density function in multiples of a random distribution (mrd) on the upper hemisphere (-Z):
+            # poles binned on an equal-area grid (Lambert projection, Y down), smoothed with the axial von Mises-Fisher
+            # kernel exp(kappa (|cos| - 1)), where a direction and its opposite are the same pole, then projected
+            kappa = np.log(2)/(1-np.cos(np.radians(width)))
+            nGrid = int(np.clip(round(4*np.sqrt(2)/np.radians(width)), 48, 128))  # about 4 cells per half width
+            direction = np.where(direction[:, 2:] > 0, -direction, direction)   # fold onto the upper hemisphere
+            factor = np.sqrt(2/(1-direction[:, 2]))
+            lambert = np.stack([-direction[:, 1]*factor, direction[:, 0]*factor])  # rows: plot y (Y down), columns: x
+            cell = np.clip(((lambert + np.sqrt(2))/(2*np.sqrt(2))*nGrid).astype(int), 0, nGrid-1)
+            counts = np.bincount(cell[0]*nGrid + cell[1], minlength=nGrid**2).astype(float)
+            # cell centers on the sphere; centers outside the projection disk move onto its rim
+            row, col = (np.indices((nGrid, nGrid)).reshape(2, -1) + 0.5)/nGrid*2*np.sqrt(2) - np.sqrt(2)
+            rr = np.minimum(row**2 + col**2, 2.)
+            centers = np.stack([col*np.sqrt(1-rr/4), -row*np.sqrt(1-rr/4), rr/2-1], axis=1)
+            centers /= np.linalg.norm(centers, axis=1, keepdims=True)
+            filled = counts > 0
+            # ponytail: all pairs of cells, about 7 s for width 2°; a kd-tree with a cutoff angle if small widths matter
+            pdf = np.zeros(nGrid**2)
+            for start in range(0, nGrid**2, 1024):
+                cosines = np.abs(centers[start:start+1024] @ centers[filled].T)
+                pdf[start:start+1024] = np.exp(kappa*(cosines-1)) @ counts[filled]
+            # uniform distribution: len(direction)/(2 pi) poles per steradian times the kernel integral (hemisphere)
+            kernelIntegral = 2*np.pi*(1-np.exp(-kappa))/kappa
+            pdf = (pdf * 2*np.pi/(len(direction)*kernelIntegral)).reshape(nGrid, nGrid)
+            # stereographic image: pixel -> direction on the upper hemisphere -> Lambert grid of the density
+            sx, sy = np.meshgrid(np.linspace(-1, 1, density), np.linspace(-1, 1, density))
+            rr = sx**2 + sy**2
+            scale = np.sqrt(2/(1+(1-rr)/(1+rr)))*2/(1+rr)  # Lambert coordinates are the stereographic ones times this
+            rows, cols = [(c*scale + np.sqrt(2))/(2*np.sqrt(2))*nGrid - 0.5 for c in (sy, sx)]
+            img = ndi.map_coordinates(pdf, [rows, cols], order=1, mode='nearest')
+            img[(rr > 1) | (img < vmin)] = np.nan
             cmap = colors.LinearSegmentedColormap.from_list('my', [(1, 1, 1), maxColor])
-            center = (density - 1)/2
-            imgDim = density+2*size
-            img = np.zeros((imgDim, imgDim))
-            x, y = np.nan_to_num(x), np.nan_to_num(y)
-            for xCoordinate, yCoordinate in zip(x, y):
-                ix = int((xCoordinate - -1.) * center) + size
-                iy = int((yCoordinate - -1.) * center) + size
-                if 0 <= ix < imgDim and 0 <= iy < imgDim:
-                    img[iy][ix] += 1
-            img = ndi.gaussian_filter(
-                img, (size, size))  # gaussian convolution
-            img /= np.max(img)                               # normalize
-            # filter out low values to make transparent
-            img[img < vmin] = np.nan
-            ax.imshow(img, cmap=cmap, alpha=alpha, vmin=0.0, vmax=vmax, origin='lower', extent=(-1, 1, -1, 1))
+            image = ax.imshow(img, cmap=cmap, alpha=alpha, vmin=0.0, vmax=vmax, origin='lower', extent=(-1, 1, -1, 1))
+            fig.colorbar(image, ax=ax, label='mrd', shrink=0.8)
             ax.plot(np.cos(np.linspace(0, 2*np.pi, 100)),
                     np.sin(np.linspace(0, 2*np.pi, 100)), 'k-', lw=2)
             ax.plot([0, 0], [-1, 1], 'k--', lw=1)
             ax.plot([-1, 1], [0, 0], 'k--', lw=1)
-            # plt.colorbar()
         ax.set_aspect('equal', adjustable='box')
         ax.set_xlim((-1, 1))
         ax.set_ylim((-1, 1))

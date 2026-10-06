@@ -118,9 +118,6 @@ also be documented in this repository when they need to stay alongside the code.
 
 - Bruker `.ctf`: `docs/source/conventions.rst` has no Bruker row; every `.ctf` is treated as Oxford. Find a Bruker
   (Esprit) file with a figure made by Esprit; `W_TKD.ctf` cannot decide it alone, its paper plotted with MTEX.
-- `plotPF` distribution: replace the pixel Gaussian on the stereographic image by a pole density function: von
-  Mises-Fisher kernel (width in degrees) on the sphere, equal-area grid, normalized to mrd, then projected. Fixes
-  rim/area distortion and gives comparable units; a step towards ODFs, which smooth in orientation space.
 
 
 ## Notes
