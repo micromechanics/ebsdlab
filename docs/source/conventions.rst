@@ -50,7 +50,7 @@ q = SAMPLE · q_file · CRYSTAL. ``writeANG`` rotates back into the EDAX frame. 
      - sample frame (SAMPLE)
      - crystal frame, hexagonal/trigonal (CRYSTAL)
    * - EDAX (TSL OIM)
-     - ``.ang`` ``.osc`` ``.txt``
+     - ``.ang`` ``.osc`` ``.h5`` ``.txt``
      - 180° about [1-10]: file x → -Y, y → -X, z → -Z
      - none, file x = a1
    * - Oxford (AZtec, Channel 5)

@@ -6,7 +6,7 @@ Quickstart
 Load a map and plot the confidence index (CI), the inverse pole figure (IPF) along the normal direction (ND)
 and the pole figure (PF) of the [1,0,0] direction:
 
-- Read EBSD data from a file (.ang, .osc, .crc, .ctf, or .txt).
+- Read EBSD data from a file (.ang, .osc, EDAX .h5, .crc, .ctf, or .txt).
 - Plot the confidence index.
 - Plot the IPF along ND, the default, and add a scale bar.
 - Plot the PF as a density.

@@ -6,6 +6,7 @@
 | `EBSD.osc` | EDAX/TSL binary `.osc` | Copper (cubic, FCC), same scan as `EBSD.ang` | 1.0 MB | loads; pass `symmetry='cubic'` |
 | `EBSD.oim` | EDAX OIM project | refers to `EBSD.ang` | 1.9 MB | not read |
 | `AZ31B.ang` | EDAX/TSL `.ang`, square grid, 223 x 199 | AZ31B magnesium (hexagonal) | 3.9 MB | loads |
+| `CPTi.h5` | EDAX OIM `.h5`, square grid, 521 x 454 | Titanium alpha, CP grade 2 (hexagonal) | 10.4 MB | loads; needs h5py |
 | `Catillopecten.crc` + `.cpr` | Oxford binary `.crc` | Calcite (trigonal), Aragonite (orthorhombic) | 0.4 MB | loads |
 | `Catillopecten_Fig6a.crc` + `.cpr` | Oxford binary `.crc`, 38709 points | Calcite (trigonal) | 1.0 MB | loads |
 | `Eclogite_Fig5.crc` + `.cpr` | Oxford binary `.crc`, 115 x 85 | Garnet (cubic), Omphacite, Hornblende, Clinozoisite, Glaucophane (monoclinic), Albite (triclinic), Rutile (tetragonal), Quartz (trigonal) | 0.2 MB | loads |
@@ -27,6 +28,15 @@
 - Paper: Maj, Musiał, Nowak, Metall. Mater. Trans. A, doi:10.1007/s11661-026-08296-8 (arXiv:2512.19548), Fig. 4f
   (⊥ ED, IPF TD) shows this map, turned by 90°
 - Authors: M. Maj, S. Musiał, M. Nowak
+- License: CC-BY-4.0
+
+### `CPTi.h5`
+- Original name: `ET10_7_EBSD_post_mortem.h5`, unchanged; written by EDAX OIM Analysis 7.3
+- Source: Zenodo, "Multimodal analysis of the early stage of plasticity in a polycrystalline titanium sample: EBSD
+  analysis"
+- URL: https://zenodo.org/records/12801865, DOI 10.5281/zenodo.12801865
+- The record also has `ET10_7_EBSD_PM_clean_grains_OIM.tif`, an OIM grain map of this scan: 96 % of its grain
+  boundaries match ebsdlab's within one pixel, without flip
 - License: CC-BY-4.0
 
 ### `W_TKD.ctf`

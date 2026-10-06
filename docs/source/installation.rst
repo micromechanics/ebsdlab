@@ -76,4 +76,6 @@ Install the optional GUI dependency and start the application:
    $ pip install 'ebsdlab[gui]'
    $ ebsdlab-gui
 
+EDAX OIM ``.h5`` files need h5py: ``pip install 'ebsdlab[h5]'``.
+
 Next: :ref:`quickstart`.

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 EDAX_SAMPLE    = Rotation.from_rotvec(np.pi*np.array([1, -1, 0])/np.sqrt(2))  # 180° about [1-10]
 OXFORD_CRYSTAL = Rotation.from_euler('z', -30, degrees=True)                  # hexagonal/trigonal only
 FRAMES = {'.ang': (EDAX_SAMPLE, None), '.osc': (EDAX_SAMPLE, None), '.txt': (EDAX_SAMPLE, None),
-          '.crc': (None, OXFORD_CRYSTAL), '.ctf': (None, OXFORD_CRYSTAL)}
+          '.h5': (EDAX_SAMPLE, None), '.crc': (None, OXFORD_CRYSTAL), '.ctf': (None, OXFORD_CRYSTAL)}
 
 
 def rotateToConventions(ebsd: EBSD, suffix: str) -> None:
@@ -168,6 +168,52 @@ def loadANG(ebsd: EBSD, fileName: str = '') -> None:
     ebsd.width     = max(data[:, 3])
     ebsd.height    = max(data[:, 4])
     del data
+    return
+
+
+def loadH5(ebsd: EBSD, fileName: str = '') -> None:
+    """Load EDAX OIM .h5 file, the binary counterpart of .ang; the first scan of the file is read.
+    Needs h5py: pip install 'ebsdlab[h5]'
+
+    Args:
+       fileName: file to read [default: ebsd.fileName]
+    """
+    try:
+        import h5py  # pylint: disable=import-outside-toplevel
+    except ImportError as error:
+        raise ImportError("Reading .h5 files needs h5py: pip install 'ebsdlab[h5]'") from error
+    if fileName:
+        ebsd.fileName = fileName
+    print('Load .h5 file: ', ebsd.fileName)
+    with h5py.File(ebsd.fileName, 'r') as fileHandle:
+        manufacturer = fileHandle[' Manufacturer'][0].decode() if ' Manufacturer' in fileHandle else 'unknown'
+        if manufacturer != 'EDAX':
+            raise ValueError(f'Only EDAX OIM .h5 files are supported, not {manufacturer}')
+        scans = [name for name in fileHandle if isinstance(fileHandle[name], h5py.Group) and 'EBSD' in fileHandle[name]]
+        if len(scans) > 1:
+            print('   File has several scans, read the first:', scans)
+        header, data = fileHandle[scans[0]]['EBSD/Header'], fileHandle[scans[0]]['EBSD/Data']
+        ebsd.meta = {'Scan': scans[0], 'Version': fileHandle[' Version'][0].decode(),
+                     'GRID:': header['Grid Type'][0].decode()}
+        phases = header['Phase']
+        ebsd.sym = [symmetryFromCode(int(phases[k]['Symmetry'][0]), 'TSL')
+                    for k in sorted(phases, key=int)]
+        x, y = data['X Position'][()], data['Y Position'][()]
+        valid = (x > -1e6) & (y > -1e6)  # invalid points: x = y = -1111111
+        ebsd.phi1      = data['Phi1'][()][valid].astype(float)
+        ebsd.phi       = data['Phi'][()][valid].astype(float)
+        ebsd.phi2      = data['Phi2'][()][valid].astype(float)
+        ebsd.iq        = data['IQ'][()][valid].astype(float)
+        ebsd.ci        = data['CI'][()][valid].astype(float)
+        ebsd.phaseID   = data['Phase'][()][valid].astype(np.uint8)
+        ebsd.phaseID  += not ebsd.phaseID.any()  # single-phase EDAX files use 0
+        ebsd.semSignal = data['SEM Signal'][()][valid].astype(np.uint8)
+        ebsd.fit       = data['Fit'][()][valid].astype(float)
+    if not valid.all():
+        print('   Invalid points skipped:', (~valid).sum())
+    ebsd.setGrid(x[valid].astype(float), y[valid].astype(float))
+    ebsd.width     = float(x[valid].max())
+    ebsd.height    = float(y[valid].max())
     return
 
 
@@ -536,4 +582,4 @@ def writeANG(ebsd: EBSD, fileName: str) -> None:
     print('Duration writeANG: ', int(np.round(time.time()-startTime)), 'sec')
     return
 
-LOADERS = {'.ang': loadANG, '.osc': loadOSC, '.txt': loadTXT, '.crc': loadCRC, '.ctf': loadCTF}
+LOADERS = {'.ang': loadANG, '.osc': loadOSC, '.txt': loadTXT, '.h5': loadH5, '.crc': loadCRC, '.ctf': loadCTF}

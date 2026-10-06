@@ -3,7 +3,7 @@
 Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in scanning electron microscopes to determine the crystallographic orientation at the micrometer scale. This software package provides tools to import, analyze, and visualize the data.
 
 ## Features:
-  - File formats accepted .ang | .osc | .crc | .ctf | .txt
+  - File formats accepted .ang | .osc | .h5 (EDAX) | .crc | .ctf | .txt
   - fast plotting: maps are drawn directly from the scan grid
     - virtual mask (only used for plotting)
       - increases speed in intermediate test plots
@@ -91,6 +91,8 @@ $ pip install 'ebsdlab[gui]'
 $ ebsdlab-gui
 ```
 
+EDAX OIM `.h5` files need h5py: `pip install 'ebsdlab[h5]'`.
+
 ## Documentation
 [Documentation on github pages](https://micromechanics.github.io/ebsdlab/): quickstart, user guide,
 conventions, verification against OIM and MTEX, design scope, and development (tests, static checks).
@@ -114,18 +116,17 @@ conventions, verification against OIM and MTEX, design scope, and development (t
 Open issues are tracked in [GitHub Issues](https://github.com/micromechanics/ebsdlab/issues). Local issue notes may
 also be documented in this repository when they need to stay alongside the code.
 
-## Notes
-### Group: implement new features
-- Grain reconstruction
-- Loader for pymicro HDF5: Zenodo 12801865 (doi:10.5281/zenodo.12801865, CC-BY-4.0), CP-Ti grade 2 (hexagonal),
-  `ET10_7_EBSD_post_mortem.h5` (10.4 MB; `ET10_7_EBSD_post_mortem_data_XYZ.h5`, 19.7 MB) with an OIM image of the
-  same map, `ET10_7_EBSD_PM_clean_grains_OIM.tif` (0.9 MB), for comparison. The pymicro frame is unknown; it
-  needs a row in `docs/source/conventions.rst`.
 - Bruker `.ctf`: `docs/source/conventions.rst` has no Bruker row; every `.ctf` is treated as Oxford. Find a Bruker
   (Esprit) file with a figure made by Esprit; `W_TKD.ctf` cannot decide it alone, its paper plotted with MTEX.
 - `plotPF` distribution: replace the pixel Gaussian on the stereographic image by a pole density function: von
   Mises-Fisher kernel (width in degrees) on the sphere, equal-area grid, normalized to mrd, then projected. Fixes
   rim/area distortion and gives comparable units; a step towards ODFs, which smooth in orientation space.
+
+
+## Notes
+### Group: implement new features
+- Grain reconstruction
+- Grain cleaning: if all neighbors are one phase and one grain. add this
 
 ### Group: GUI
 - Goal: extremely simple; only key parameters visible, everything else in the generated .py code.

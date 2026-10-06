@@ -9,7 +9,7 @@ ebsdlab reads, plots and analyzes already indexed EBSD orientation maps.
 Features
 --------
 
-- reads .ang | .osc | .crc | .ctf | .txt; writes .ang
+- reads .ang | .osc | .h5 (EDAX) | .crc | .ctf | .txt; writes .ang
 - fast plotting: maps are drawn directly from the scan grid; a virtual mask, used only for plotting, gives quick
   previews and crops
 - verified with the OIM software and mTex (:ref:`verification`); heavily tested for cubic

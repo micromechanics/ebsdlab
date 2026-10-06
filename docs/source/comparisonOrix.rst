@@ -11,8 +11,8 @@ the right tool. The orix details refer to version 0.15.0.
 Advantages of ebsdlab
 ---------------------
 
-- **File formats:** reads binary EDAX ``.osc`` and Oxford ``.crc``/``.cpr`` directly. orix reads
-  ``.ang``, ``.ctf``, h5ebsd variants and EMsoft files, but not ``.osc`` or ``.crc``.
+- **File formats:** reads binary EDAX ``.osc`` and ``.h5`` and Oxford ``.crc``/``.cpr`` directly. orix
+  reads ``.ang``, ``.ctf``, h5ebsd variants and EMsoft files, but not ``.osc``, EDAX ``.h5`` or ``.crc``.
 - **Hexagonal grids:** handles TSL ``HexGrid`` scans natively, including the six-neighbor stencil
   for neighbor and KAM calculations. With orix, hexagonal scans are therefore usually converted to a square grid first (e.g. in EDAX
   OIM), which resamples the data. ebsdlab loads, plots and analyzes hexagonal scans directly.
@@ -47,12 +47,12 @@ Advantages of orix
 Resource usage
 --------------
 
-A one-time comparison on 2026-10-06, ebsdlab 0.0.7b1 (development version of that day) and orix 0.15.0, both with Python 3.14.4,
-numpy 2.5.3, scipy 1.18.1 and matplotlib 3.11.2, on a laptop with an AMD Ryzen 5 3500U and 14 GB memory. Each
-package is installed alone in a fresh virtual environment, and each measurement runs in a new process, three runs
-that agree within 0.1 s: load the ``.ang`` file, then plot the IPF map along Z. Peak memory is the peak resident memory of the process,
-including the imports; loaded data is the size of all arrays of the loaded map. The script is
-``docs/benchmark_orix.py``.
+A one-time comparison on 2026-10-06, ebsdlab 0.0.7b1 (development version of that day) and orix 0.15.0, both with
+Python 3.14.4, numpy 2.5.3, scipy 1.18.1 and matplotlib 3.11.2, on a laptop with an AMD Ryzen 5 3500U and 14 GB
+memory. Each package is installed alone in a fresh virtual environment, and each measurement runs in a new process,
+three runs that agree within 0.1 s: load the ``.ang`` file, then plot the IPF map along Z. Peak memory is the peak
+resident memory of the process, including the imports; loaded data is the size of all arrays of the loaded map. The
+script is ``docs/benchmark_orix.py``.
 
 The file is ``EBSD_deformed_I_ED.ang`` of Maj et al. (Zenodo 18668585, 190 MB), 1,593,848 points. Its hexagonal
 grid is made rectangular for the comparison, because orix cannot plot hexagonal grids: every second row is shifted

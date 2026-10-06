@@ -62,6 +62,8 @@ filelock==3.32.2
     #   virtualenv
 fonttools==4.63.0
     # via matplotlib
+h5py==3.16.0
+    # via ebsdlab (setup.cfg)
 identify==2.6.19
     # via pre-commit
 idna==3.18
