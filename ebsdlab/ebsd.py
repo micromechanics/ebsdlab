@@ -11,13 +11,15 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.font_manager import FontProperties
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from scipy.interpolate import griddata
+from scipy.sparse import coo_array
+from scipy.sparse.csgraph import connected_components
 from scipy.spatial.transform import Rotation
 from . import fileIO
 from ._rotation import asBungeEulers, fromBungeEulers, multiply
 from .symmetry import Symmetry, showOrSave
 
 
-class EBSD:
+class EBSD:  # pylint: disable=too-many-public-methods
     """Class to allow for read EBSD data"""
 
     def __init__(self, fileName: str | Path, symmetry: str = '') -> None:
@@ -519,6 +521,50 @@ class EBSD:
     def calcKAM(self) -> None:
         """calculate Kerner Average Misorientation in DEGREES (because user focused) from the nearest neighbors"""
         startTime = time.time()
+        _, angles = self._neighborMisorientations()
+        self.kam = np.degrees(np.nanmean(angles, axis=1))
+        self.kam[self.ci == -1.0] = np.nan
+        print('Duration KAM evaluation: ', int(np.round(time.time()-startTime)), 'sec')
+        return
+
+
+    def calcGrains(self, tolerance: float = 5., minSize: int = 6, minNRows: int = 2) -> None:
+        """identify grains: neighbors of one phase that are indexed and misoriented less than tolerance are linked;
+        grains are the connected regions. grainID is 1, 2, ...; 0 = unindexed or grain too small.
+
+        Args:
+           tolerance: maximum misorientation of neighbors in a grain in degrees
+           minSize: minimum number of points of a grain
+           minNRows: minimum number of rows and of columns a grain spans
+        """
+        startTime = time.time()
+        neighbors, angles = self._neighborMisorientations()
+        linked = angles < np.radians(tolerance)  # nan: not linked
+        points = np.broadcast_to(np.arange(self.nPoints)[:, None], neighbors.shape)
+        graph  = coo_array((np.ones(linked.sum()), (points[linked], neighbors[linked])),
+                           shape=(self.nPoints, self.nPoints))
+        _, labels = connected_components(graph, directed=False)
+        x, y = self.xy()
+        rows = np.rint((y-self.y0)/self.stepSizeY).astype(int)
+        cols = np.floor((x-self.x0)/self.stepSizeX + 0.01).astype(int)  # hex: the shifted rows share a column
+        keep = np.bincount(labels) >= minSize
+        for coordinate in (rows, cols):  # number of distinct rows/columns of each region
+            period = coordinate.max()+1
+            keep &= np.bincount(np.unique(labels*period + coordinate)//period, minlength=len(keep)) >= minNRows
+        indexed = np.array([bool(sym.lattice) for sym in self.sym])[self.phaseID] & (self.ci != -1.0)
+        keep[labels[~indexed]] = False  # unindexed points are single regions
+        self.grainID = (np.cumsum(keep)*keep).astype(np.uint32)[labels]
+        print('   Number of grains:', int(keep.sum()))
+        print('Duration grain identification: ', int(np.round(time.time()-startTime)), 'sec')
+        return
+
+
+    def _neighborMisorientations(self) -> tuple[np.ndarray, np.ndarray]:
+        """misorientation of each point to its nearest neighbors
+
+        Returns:
+           neighbors (see neighbors()), angles in radians; nan for invalid, unindexed or other-phase neighbors
+        """
         neighbors = self.neighbors()
         angles = np.full(neighbors.shape, np.nan)
         for phase, sym in enumerate(self.sym):
@@ -534,10 +580,8 @@ class EBSD:
         # -10 would index points at the end of the map
         angles[(neighbors < 0) | (self.phaseID[neighbors] != self.phaseID[:, None])] = np.nan
         angles[self.ci[neighbors] == -1.0] = np.nan
-        self.kam = np.degrees(np.nanmean(angles, axis=1))
-        self.kam[self.ci == -1.0] = np.nan
-        print('Duration KAM evaluation: ', int(np.round(time.time()-startTime)), 'sec')
-        return
+        angles[self.ci == -1.0] = np.nan
+        return neighbors, angles
 
 
     def neighbors(self, idx: int | None = None) -> np.ndarray:

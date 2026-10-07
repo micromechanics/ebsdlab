@@ -119,8 +119,10 @@ also be documented in this repository when they need to stay alongside the code.
 
 ## Notes
 ### Group: implement new features
-- Grain reconstruction
-- Grain cleaning: if all neighbors are one phase and one grain. add this
+- Grain dilation, `grainDilation()`, after `calcGrains`: a point with `grainID` 0 joins the grain of the majority of
+  its assigned neighbors and takes phase and orientation of the neighbor with the highest CI; repeat until nothing
+  changes. In place (reload to undo); changed points in `self.cleaned`. Removes wild spikes and fills unindexed
+  points.
 
 ### Group: GUI
 - Goal: extremely simple; only key parameters visible, everything else in the generated .py code.

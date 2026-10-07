@@ -140,6 +140,20 @@ def test_grid_neighbors_are_one_step_away(tmp_path, fileName, grid, nNeighbors):
         assert np.sum(np.all(neighbors >= 0, axis=1)) > 0.9*ebsd.nPoints
 
 
+@pytest.mark.parametrize('fileName', ['EBSD.ang', 'AZ31B.ang'])
+def test_calc_grains(fileName):
+    """Smoke test: grains are numbered 1, 2, ..., have at least minSize points and one phase each."""
+    ebsd = EBSD(DATA_DIR/fileName)
+    ebsd.calcGrains()
+    grainID = ebsd.grainID
+    assert grainID.shape == (ebsd.nPoints,)
+    assert grainID.max() > 1
+    assert np.all(np.bincount(grainID)[1:] >= 6)
+    assert np.all(grainID[ebsd.ci == -1] == 0)
+    for grain in range(1, grainID.max()+1):
+        assert len(np.unique(ebsd.phaseID[grainID == grain])) == 1
+
+
 @pytest.mark.mpl_image_compare(savefig_kwargs={'bbox_inches': 'tight'})
 @pytest.mark.parametrize('direction', ['ND', 'TD'])
 def test_ebsd_verification_ipf(direction):
