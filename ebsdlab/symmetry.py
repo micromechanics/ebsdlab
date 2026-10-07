@@ -2,12 +2,10 @@
 
 import math
 from typing import Any
-
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.spatial.transform import Rotation
-
 from ._rotation import asRodrigues
 
 # Directions on an SST edge might give components of -1e-15 instead of exactly 0; count them as inside

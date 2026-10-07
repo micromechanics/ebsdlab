@@ -422,7 +422,7 @@ class EBSD:  # pylint: disable=too-many-public-methods
             sx, sy = np.meshgrid(np.linspace(-1, 1, density), np.linspace(-1, 1, density))
             rr = sx**2 + sy**2
             scale = np.sqrt(2/(1+(1-rr)/(1+rr)))*2/(1+rr)  # Lambert coordinates are the stereographic ones times this
-            rows, cols = [(c*scale + np.sqrt(2))/(2*np.sqrt(2))*nGrid - 0.5 for c in (sy, sx)]
+            rows, cols = ((c*scale + np.sqrt(2))/(2*np.sqrt(2))*nGrid - 0.5 for c in (sy, sx))
             img = ndi.map_coordinates(pdf, [rows, cols], order=1, mode='nearest')
             img[(rr > 1) | (img < vmin)] = np.nan
             cmap = colors.LinearSegmentedColormap.from_list('my', [(1, 1, 1), maxColor])

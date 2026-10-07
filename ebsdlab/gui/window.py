@@ -1,18 +1,12 @@
 """Main window for guided EBSD plotting and reproducible code export."""
 from __future__ import annotations
-
 from pathlib import Path
 from typing import Any
-
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox,
-                               QDoubleSpinBox, QFileDialog, QFormLayout,
-                               QHBoxLayout, QLabel, QLineEdit, QMainWindow,
-                               QMessageBox, QPushButton, QSpinBox, QSplitter,
-                               QTabWidget, QTextEdit, QVBoxLayout, QWidget)
-
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout,
+                               QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QSpinBox,
+                               QSplitter, QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 from ..ebsd import EBSD
 from ..fileIO import LOADERS
 from .rangeSelector import RangeSelector

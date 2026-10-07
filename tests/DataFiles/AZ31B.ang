@@ -12,7 +12,7 @@
 # Phase 1
 # MaterialName  	AZ31B
 # Formula     	None
-# Info		
+# Info
 # Symmetry              62
 # PointGroupID          126
 # LatticeConstants      3.209 3.209 5.210  90.000  90.000 120.000
@@ -32,11 +32,11 @@
 # NCOLS_EVEN: 223
 # NROWS: 199
 #
-# OPERATOR: 	
+# OPERATOR:
 #
-# SAMPLEID: 	
+# SAMPLEID:
 #
-# SCANID: 	
+# SCANID:
 #
 # VERSION 7
 # NOTES: Start
@@ -54,7 +54,7 @@
 # NOTES: End
 # COLUMN_COUNT: 10
 # COLUMN_HEADERS: phi1, PHI, phi2, x, y, IQ, CI, Phase index, SEM, Fit
-# COLUMN_UNITS: radians, radians, radians, microns, microns, , , , , degrees, , , 
+# COLUMN_UNITS: radians, radians, radians, microns, microns, , , , , degrees, , ,
 # COLUMN_NOTES: Start
 # Column 1: phi1 [radians]
 # Column 2: PHI [radians]

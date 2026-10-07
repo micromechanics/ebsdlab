@@ -15,6 +15,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 from ._rotation import asBungeEulers, fromBungeEulers, multiply
 from .symmetry import GROUPS, Symmetry
+
 if TYPE_CHECKING:
     from .ebsd import EBSD
 

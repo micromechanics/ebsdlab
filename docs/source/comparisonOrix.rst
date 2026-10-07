@@ -107,4 +107,3 @@ Dependencies
    * - **orix 0.15.0**
      - 11
      - 41
-

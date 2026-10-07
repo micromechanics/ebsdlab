@@ -4,7 +4,6 @@ channels:
   - conda-forge
 dependencies:
   - python>=3.10
-  - pillow
   - numpy
   - scipy>=1.14
   - matplotlib
@@ -12,11 +11,12 @@ dependencies:
   - sphinx
   - jupyter_sphinx
   - sphinx_tabs
+  - piccolo-theme
   - pytest
   - pytest-mpl
   - isort
   - mypy
   - pylint
   - pre-commit
-  - requests
   - pip-tools
+  - h5py
