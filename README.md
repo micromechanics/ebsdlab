@@ -117,11 +117,3 @@ also be documented in this repository when they need to stay alongside the code.
 
 
 ## Notes
-### Group: GUI
-- Goal: extremely simple; only key parameters visible, everything else in the generated .py code.
-- Flow: load once (info line) → process (min CI, crop to toolbar view, KAM on demand, cached) → plot; every change
-  replots, no button. One 'Show' list: IPF (+direction), phase, IQ, CI, KAM, PF (+axis).
-- One button at the end: render in full detail (omitting the automatic vmask).
-- Defaults instead of options: scale bar on, axes off, unit-cell size from map (possibly 3 settings), automatic
-  preview vmask for large maps. Formats from `fileIO.LOADERS` (adds `.ctf`).
-- Generated code: ample comments, full map, ends with `plt.savefig(...)`.

@@ -1,37 +1,66 @@
-"""Main window for guided EBSD plotting and reproducible code export."""
+"""Main window: load, analyse, clean and plot an EBSD map; the generated Python code reproduces the plot."""
 from __future__ import annotations
+import math
+import re
 from pathlib import Path
 from typing import Any
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout,
                                QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QSpinBox,
-                               QSplitter, QTabWidget, QTextEdit, QVBoxLayout, QWidget)
+                               QSplitter, QTextEdit, QVBoxLayout, QWidget)
 from ..ebsd import EBSD
 from ..fileIO import LOADERS
-from .rangeSelector import RangeSelector
+
+PREVIEW_POINTS = 250_000  # preview: pole figures, the slowest plots, need about 2 µs per point
+IMPORTS = {'np': 'import numpy as np', 'plt': 'import matplotlib.pyplot as plt',
+           'colormaps': 'from matplotlib import colormaps',
+           'ListedColormap': 'from matplotlib.colors import ListedColormap',
+           'Patch': 'from matplotlib.patches import Patch', 'EBSD': 'from ebsdlab.ebsd import EBSD'}
+CHOICES = {'IPF': ['ND', 'RD', 'TD'], 'PF': ['100', '110', '111'], 'KAM': ['2°', '5°', '10°'],
+           'Others': ['grains', 'phase', 'IQ', 'CI']}
+UNIT_CELLS = {'no unit cells': 0., 'small unit cells': 0.03, 'medium unit cells': 0.06,
+              'large unit cells': 0.12}  # size as fraction of the map width
+
+
+def imports(lines: list[str]) -> list[str]:
+    """Import lines for the names that the code uses.
+
+    Args:
+       lines: code lines; comments are ignored
+
+    Returns:
+       import lines
+    """
+    code = '\n'.join(line for line in lines if not line.lstrip().startswith('#'))
+    return [line for name, line in IMPORTS.items() if re.search(rf'\b{name}\b', code)]
 
 
 class EBSDGui(QMainWindow):
-    """A compact UI for the most common ebsdlab plot workflows."""
+    """Load, analyse, clean and plot: few choices per step, every change replots."""
 
     def __init__(self) -> None:
         """Create the window with an empty plot area."""
         super().__init__()
-        self.filePath: Path | None                      = None
-        self.ebsd:     EBSD | None                      = None
-        self.figure:   Any                              = None
-        self.canvas:   FigureCanvasQTAgg | None         = None
-        self.toolbar:  NavigationToolbar2QT | None      = None
-        self.placeholder: QLabel | None                 = None
-        self.overlays: list[tuple[float, float, float]] = []
+        self.filePath: Path | None                 = None
+        self.ebsd:     EBSD | None                 = None
+        self.grains:   tuple[float, int] | None    = None   # tolerance and minimum size of the calculated grains
+        self.dilated                               = False
+        self.cells:    list[tuple[float, float]]   = []     # unit-cell positions in [um]
+        self.second                                = ''     # last selected second choice, e.g. unit-cell size
+        self.home:     tuple[float, ...] | None    = None   # limits of the whole map: xmin, xmax, ymin, ymax
+        self.figure:   Any                         = None
+        self.canvas:   FigureCanvasQTAgg | None    = None
+        self.toolbar:  NavigationToolbar2QT | None = None
         self.setWindowTitle('ebsdlab')
         self.resize(1280, 800)
         self._buildUi()
 
 
     def setFile(self, filePath: str | Path) -> None:
-        """Select an input file while displaying only its filename in the UI.
+        """Load an EBSD file and plot it.
 
         Args:
            filePath: path of the EBSD file
@@ -39,93 +68,84 @@ class EBSDGui(QMainWindow):
         self.filePath = Path(filePath).expanduser().resolve()
         self.fileName.setText(self.filePath.name)
         self.fileName.setToolTip(str(self.filePath))
+        try:
+            self._load()
+        except (OSError, ValueError, IndexError, KeyError) as error:
+            self.ebsd = None
+            QMessageBox.critical(self, 'Could not load file', str(error))
+            return
+        self.cells, self.home = [], None
+        self._updateChoices()
 
 
     def chooseFile(self) -> None:
-        """Prompt for an EBSD file and create the selected plot."""
-        name, _ = QFileDialog.getOpenFileName(
-            self, 'Open EBSD file', '', 'EBSD files (*.ang *.osc *.txt *.crc)')
+        """Prompt for an EBSD file and plot it."""
+        name, _ = QFileDialog.getOpenFileName(self, 'Open EBSD file', '',
+                                              'EBSD files (' + ' '.join('*'+suffix for suffix in LOADERS) + ')')
         if name:
             self.setFile(name)
-            self.createPlot()
 
 
-    def createPlot(self) -> None:
-        """Load the selected data and render the chosen plot style."""
+    def replot(self, full: bool = False) -> None:
+        """Analyse and clean as needed, then run the plot code: a preview, or the full detail of the view.
+
+        Args:
+           full: all points, cropped to the view; otherwise a preview of the whole map
+        """
+        if self.ebsd is None:
+            return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            ebsd = self._loadEbsd()
-            self._applyFilters(ebsd)
-            self.overlays = []
-            plotType = self.plotType.currentText()
-            if plotType == 'CI map':
-                self.figure = ebsd.plot(ebsd.ci, show=False)
-            elif plotType == 'IPF map':
-                self.figure = ebsd.plotIPF(
-                    direction=self.subplotStyle.currentText(), show=False)
-            else:
-                self.figure = ebsd.plotPF(
-                    axis=[int(value) for value in self.subplotStyle.currentText().strip('[]').split(',')],
-                    show=False)
-            axis = self.figure.axes[0]
-            if plotType != 'Pole figure':
-                self.figure.subplots_adjust(left=0.0125, right=0.99,
-                                             bottom=0.0125, top=0.99)
-            if self.hideAxes.isChecked() and plotType != 'Pole figure':
-                axis.axis('off')
-            if self.scaleBar.isChecked() and plotType != 'Pole figure':
-                ebsd.addScaleBarOverlay(axis)
-            self._setFigure(self.figure)
+            self._process()
+            _, mask, crop, plot = self._code()
+            every = 1 if full else max(1, math.ceil(self.ebsd.nPoints/PREVIEW_POINTS))
+            self.ebsd.maskReset()
+            self.ebsd.setVMask(every)
+            namespace = {'emap': self.ebsd}
+            code = mask + (crop if full else []) + plot
+            exec('\n'.join(imports(code) + code), namespace)  # pylint: disable=exec-used
+            self._setFigure(namespace['fig'], full)
             self._refreshCode()
-            self._updateDetailVisibility()
-            self.statusBar().showMessage('Plot created')
+            self.statusBar().showMessage('Full detail' if every == 1 else
+                                         f'Preview with every {every}th point; render full detail for all')
         except (OSError, ValueError, IndexError) as error:
-            QMessageBox.critical(self, 'Could not create plot', str(error))
-            self.statusBar().showMessage('Plot creation failed')
+            self.statusBar().showMessage(f'Plot failed: {error}')
+        finally:
+            QApplication.restoreOverrideCursor()
 
 
-    def addUnitCellOverlay(self, event: Any) -> None:
-        """Add a unit-cell overlay at a click in an IPF plot.
+    def addUnitCell(self, event: Any) -> None:
+        """Add a unit cell at a click into an IPF or grain map.
 
         Args:
            event: matplotlib mouse event
         """
-        if self.ebsd is None or self.canvas is None or self.plotType.currentText() != 'IPF map':
+        scale = self._cellScale()  # 0 unless an IPF map with unit cells
+        if not scale or self.ebsd is None or event.inaxes is None or (self.toolbar and self.toolbar.mode):
             return
-        if event.inaxes is None or event.xdata is None or event.ydata is None:  # click outside the map
-            return
-        scale = self.overlayScale.value()
+        self.cells.append((event.xdata, event.ydata))
         self.ebsd.addUnitCellOverlay(event.inaxes, event.xdata, event.ydata, scale)
-        self.overlays.append((event.xdata, event.ydata, scale))
-        self.canvas.draw_idle()
+        event.canvas.draw_idle()
         self._refreshCode()
-        self._updateDetailVisibility()
-        self.statusBar().showMessage('Unit-cell overlay added')
-
-
-    def clearUnitCellOverlays(self) -> None:
-        """Recreate the plot without its unit-cell overlays."""
-        if self.figure is not None and self.overlays:
-            self.createPlot()
 
 
     def copyPythonCode(self) -> None:
-        """Copy the generated, reproducible plotting code to the clipboard."""
+        """Copy the generated code to the clipboard."""
         if self.code.toPlainText():
             QApplication.clipboard().setText(self.code.toPlainText())
             self.statusBar().showMessage('Python code copied to clipboard')
 
 
     def _buildUi(self) -> None:
-        """Create the sidebar (file, plot style, code and plot-detail tabs) and the plot area."""
-        central = QWidget(self)
-        self.setCentralWidget(central)
-        root = QHBoxLayout(central)
-        splitter = QSplitter(Qt.Orientation.Horizontal, central)
-        root.addWidget(splitter)
-
+        """Create the sidebar (load, analyse, clean, plot, code) and the plot area."""
+        splitter = QSplitter(Qt.Orientation.Horizontal, self)
+        self.setCentralWidget(splitter)
         sidebar = QWidget(splitter)
         sidebarLayout = QVBoxLayout(sidebar)
-        mainForm = QFormLayout()
+        form = QFormLayout()
+        sidebarLayout.addLayout(form)
+
+        form.addRow(self._heading('Load', top=0))
         self.fileName = QLineEdit(sidebar)
         self.fileName.setReadOnly(True)
         browse = QPushButton('Browse…', sidebar)
@@ -135,212 +155,288 @@ class EBSDGui(QMainWindow):
         fileLayout.setContentsMargins(0, 0, 0, 0)
         fileLayout.addWidget(self.fileName)
         fileLayout.addWidget(browse)
-        mainForm.addRow('EBSD file', fileRow)
-        self.plotType = QComboBox(sidebar)
-        self.plotType.addItems(['CI map', 'IPF map', 'Pole figure'])
-        self.plotType.currentTextChanged.connect(self._updateMainStyle)
-        mainForm.addRow('Plot style', self.plotType)
-        self.subplotStyleLabel = QLabel('IPF direction', sidebar)
-        self.subplotStyle = QComboBox(sidebar)
-        mainForm.addRow(self.subplotStyleLabel, self.subplotStyle)
-        self.recreate = QPushButton('Recreate plot', sidebar)
-        font = self.recreate.font()
-        font.setBold(True)
-        self.recreate.setFont(font)
-        self.recreate.clicked.connect(self.createPlot)
-        mainForm.addRow(self.recreate)
-        sidebarLayout.addLayout(mainForm)
+        form.addRow('File', fileRow)
 
-        self.tabs = QTabWidget(sidebar)
-        self.code = QTextEdit(self.tabs)
+        form.addRow(self._heading('Analyse'))
+        self.tolerance = QDoubleSpinBox(sidebar)
+        self.tolerance.setRange(0.1, 60.)
+        self.tolerance.setSingleStep(0.5)
+        self.tolerance.setValue(5.)
+        self.tolerance.setSuffix(' °')
+        form.addRow('Grain tolerance', self.tolerance)
+        self.minSize = QSpinBox(sidebar)
+        self.minSize.setRange(1, 1_000_000)
+        self.minSize.setValue(6)
+        form.addRow('Minimum grain size', self.minSize)
+
+        form.addRow(self._heading('Clean'))
+        self.minCI = QDoubleSpinBox(sidebar)
+        self.minCI.setRange(0., 1.)
+        self.minCI.setSingleStep(0.05)
+        self.minCI.setSpecialValueText('off')
+        form.addRow('Minimum CI', self.minCI)
+        self.dilation = QCheckBox('Grain dilation', sidebar)
+        form.addRow('', self.dilation)
+
+        form.addRow(self._heading('Plot'))
+        self.showList = QComboBox(sidebar)
+        self.showList.addItems(list(CHOICES))
+        form.addRow('Show', self.showList)
+        self.choice1, self.choice2 = QComboBox(sidebar), QComboBox(sidebar)
+        form.addRow('', self.choice1)
+        form.addRow('', self.choice2)
+        self.form = form
+        fullDetail = QPushButton('Render full detail', sidebar)
+        fullDetail.clicked.connect(lambda: self.replot(full=True))
+        form.addRow('', fullDetail)
+
+        sidebarLayout.addSpacing(12)
+        self.code = QTextEdit(sidebar)
         self.code.setReadOnly(True)
         self.code.setPlaceholderText('Generated code appears after a plot is created.')
-        codePage = QWidget(self.tabs)
-        codeLayout = QVBoxLayout(codePage)
-        codeLayout.addWidget(self.code)
-        self.copyCode = QPushButton('Copy Python code', codePage)
-        self.copyCode.clicked.connect(self.copyPythonCode)
-        codeLayout.addWidget(self.copyCode)
-        self.tabs.addTab(codePage, 'Code')
+        sidebarLayout.addWidget(self.code)
+        copyCode = QPushButton('Copy Python code', sidebar)
+        copyCode.clicked.connect(self.copyPythonCode)
+        sidebarLayout.addWidget(copyCode)
 
-        detailsPage = QWidget(self.tabs)
-        self.detailsForm = QFormLayout(detailsPage)
-        self.ciEnabled = QCheckBox('Mask points below CI', detailsPage)
-        self.ciEnabled.toggled.connect(self._updateDetailVisibility)
-        self.detailsForm.addRow(self.ciEnabled)
-        self.ciThreshold = self._doubleSpin(0.1, 0.0, 1.0, 0.01)
-        self.detailsForm.addRow('CI threshold', self.ciThreshold)
-        self.cropEnabled = QCheckBox('Show crop only', detailsPage)
-        self.cropEnabled.toggled.connect(self._updateDetailVisibility)
-        self.detailsForm.addRow(self.cropEnabled)
-        self.cropX = RangeSelector(parent=detailsPage)
-        self.cropY = RangeSelector(parent=detailsPage)
-        self.detailsForm.addRow('Crop X', self.cropX)
-        self.detailsForm.addRow('Crop Y', self.cropY)
-        self.downsample = QSpinBox(detailsPage)
-        self.downsample.setRange(1, 1000)
-        self.downsample.setValue(1)
-        self.detailsForm.addRow('Preview every nth point', self.downsample)
-        self.overlayScale = self._doubleSpin(1.0, 0.01, 1_000_000.0, 0.1)
-        self.detailsForm.addRow('Unit-cell scale', self.overlayScale)
-        self.clearOverlays = QPushButton('Clear unit-cell overlays', detailsPage)
-        self.clearOverlays.clicked.connect(self.clearUnitCellOverlays)
-        self.detailsForm.addRow(self.clearOverlays)
-        self.scaleBar = QCheckBox('Add scale bar', detailsPage)
-        self.detailsForm.addRow(self.scaleBar)
-        self.hideAxes = QCheckBox('Hide plot axes', detailsPage)
-        self.detailsForm.addRow(self.hideAxes)
-        self.tabs.addTab(detailsPage, 'Plot details')
-        sidebarLayout.addWidget(self.tabs)
-        splitter.addWidget(sidebar)
+        # every change replots; spin boxes only after editing, not at each key
+        for spin in (self.tolerance, self.minSize, self.minCI):
+            spin.setKeyboardTracking(False)
+            spin.valueChanged.connect(lambda _: self.replot())
+        self.dilation.toggled.connect(lambda _: self.replot())
+        self.showList.currentTextChanged.connect(self._updateChoices)
+        self.choice1.currentIndexChanged.connect(lambda _: self._updateSecond())
+        self.choice2.currentIndexChanged.connect(lambda _: self.replot())
 
         self.plotHolder = QWidget(splitter)
         self.plotLayout = QVBoxLayout(self.plotHolder)
         self.plotLayout.setContentsMargins(0, 0, 0, 0)
-        self.placeholder = QLabel('Choose an EBSD file to begin.', self.plotHolder)
-        self.plotLayout.addWidget(self.placeholder)
-        splitter.addWidget(self.plotHolder)
-        splitter.setSizes([350, 930])
+        splitter.setSizes([380, 900])
+        self.info = QLabel('Choose an EBSD file to begin.', self)  # file details, right of the messages
+        self.statusBar().addPermanentWidget(self.info)
         self.statusBar().showMessage('Ready')
-        self._updateMainStyle()
+        self._updateChoices()
 
 
     @staticmethod
-    def _doubleSpin(value: float = 0.0, minimum: float = -1_000_000.0,
-                     maximum: float = 1_000_000.0, step: float = 0.1) -> QDoubleSpinBox:
-        """Create a spin box for floating point values.
+    def _heading(text: str, top: int = 12) -> QLabel:
+        """Bold label for a workflow step.
 
         Args:
-           value: initial value
-           minimum: minimum value
-           maximum: maximum value
-           step: step size
+           text: name of the step
+           top: space above in pixels
 
         Returns:
-           spin box
+           label
         """
-        spin = QDoubleSpinBox()
-        spin.setRange(minimum, maximum)
-        spin.setDecimals(4)
-        spin.setSingleStep(step)
-        spin.setValue(value)
-        return spin
+        label = QLabel(text)
+        font = label.font()
+        font.setBold(True)
+        label.setFont(font)
+        label.setContentsMargins(0, top, 0, 0)
+        return label
 
 
-    def _updateMainStyle(self) -> None:
-        """Update the sub-style choices (IPF direction, pole axis) for the selected plot style."""
-        plotType = self.plotType.currentText()
-        choices = {'IPF map': ('IPF direction', ['ND', 'RD', 'TD']),
-                   'Pole figure': ('Pole axis', ['[1, 0, 0]', '[1, 1, 0]', '[1, 1, 1]'])}
-        label, values = choices.get(plotType, ('Map variable', ['CI']))
-        self.subplotStyleLabel.setText(label)
-        self.subplotStyle.clear()
-        self.subplotStyle.addItems(values)
-        self.subplotStyle.setVisible(plotType != 'CI map')
-        self.subplotStyleLabel.setVisible(plotType != 'CI map')
-        self._updateDetailVisibility()
-
-
-    def _updateDetailVisibility(self) -> None:
-        """Show only the plot-detail rows relevant to the selected plot style and options."""
-        isMap = self.plotType.currentText() in ('CI map', 'IPF map')
-        isIpf = self.plotType.currentText() == 'IPF map'
-        self.detailsForm.setRowVisible(self.ciThreshold, self.ciEnabled.isChecked())
-        self.detailsForm.setRowVisible(self.cropX, self.cropEnabled.isChecked())
-        self.detailsForm.setRowVisible(self.cropY, self.cropEnabled.isChecked())
-        self.detailsForm.setRowVisible(self.overlayScale, isIpf)
-        self.detailsForm.setRowVisible(self.scaleBar, isMap)
-        self.detailsForm.setRowVisible(self.hideAxes, isMap)
-        self.clearOverlays.setVisible(isIpf and bool(self.overlays))
-
-
-    def _loadEbsd(self) -> EBSD:
-        """Load the selected file.
-
-        Returns:
-           loaded EBSD data
-        """
-        if self.filePath is None or not self.filePath.is_file():
-            raise ValueError('Choose an existing EBSD data file.')
-        if self.filePath.suffix.lower() not in LOADERS:
-            raise ValueError('Supported formats are ' + ', '.join(LOADERS) + '.')
+    def _load(self) -> None:
+        """Load the file; forget grains and dilation."""
+        if self.filePath is None:
+            return
         self.ebsd = EBSD(str(self.filePath))
-        return self.ebsd
+        self.grains, self.dilated = None, False
+        e = self.ebsd
+        phases = ', '.join(sym.lattice or 'unknown' for sym in e.sym[1:]) or 'none'
+        self.info.setText(f'{self.filePath.suffix[1:]}: {e.nPoints:,} points, {e.grid}, step {e.stepSizeX:g} µm, '
+                          f'phases: {phases}')
 
 
-    def _applyFilters(self, ebsd: EBSD) -> None:
-        """Apply CI mask, preview and crop from the plot details.
+    def _updateChoices(self) -> None:
+        """Fill the first choice for the selected 'Show' entry, then the second one."""
+        show = self.showList.currentText()
+        self.choice1.blockSignals(True)
+        self.choice1.clear()
+        self.choice1.addItems(CHOICES[show])
+        if show == 'KAM':
+            self.choice1.setCurrentText('5°')
+        self.choice1.blockSignals(False)
+        self._updateSecond()
 
-        Args:
-           ebsd: EBSD data to filter
+
+    def _updateSecond(self) -> None:
+        """Fill the second choice for the 'Show' entry and first choice, keep its selection if possible; replot."""
+        show = self.showList.currentText()
+        second: list[tuple[str, Any]]
+        if show == 'IPF' or self.choice1.currentText() == 'grains':
+            second = list(UNIT_CELLS.items())
+        elif show == 'PF':
+            phases = [(k, sym.lattice) for k, sym in enumerate(self.ebsd.sym) if sym.lattice] if self.ebsd else []
+            second = [(style, (style == 'points', None)) for style in ('points', 'density')] if len(phases) < 2 else \
+                     [(f'{style} - phase {k} ({lattice})', (style == 'points', k))
+                      for style in ('points', 'density') for k, lattice in phases]
+        else:
+            second = []
+        self.second = self.choice2.currentText() or self.second
+        self.choice2.blockSignals(True)
+        self.choice2.clear()
+        for text, data in second:
+            self.choice2.addItem(text, data)
+        self.choice2.setCurrentText(self.second)
+        self.choice2.blockSignals(False)
+        self.form.setRowVisible(self.choice2, bool(second))
+        self.replot()
+
+
+    def _cellScale(self) -> float:
+        """Unit-cell size in [um] for IPF and grain maps; 0 without unit cells.
+
+        Returns:
+           scale of the unit cells
         """
-        ebsd.maskReset()
-        ebsd.setVMask(self.downsample.value())
-        if self.ciEnabled.isChecked():
-            ebsd.maskCI(self.ciThreshold.value())
-        if self.cropEnabled.isChecked():
-            xmin, xmax = self.cropX.values()
-            ymin, ymax = self.cropY.values()
-            ebsd.cropVMask(xmin, ymin, xmax, ymax)
+        if self.ebsd is None or not (self.showList.currentText() == 'IPF' or self.choice1.currentText() == 'grains'):
+            return 0.
+        return (self.choice2.currentData() or 0.) * self.ebsd.width
 
 
-    def _setFigure(self, figure: Any) -> None:
-        """Show a new figure with its toolbar instead of the previous one.
+    def _process(self) -> None:
+        """Calculate grains, dilation and KAM if needed; keep them until the file or the settings change."""
+        grains = (self.tolerance.value(), self.minSize.value())
+        dilate = self.dilation.isChecked()
+        if self.dilated and (not dilate or self.grains != grains):  # undo the dilation
+            self._load()
+        e = self.ebsd
+        assert e is not None
+        if (dilate or self.choice1.currentText() == 'grains') and self.grains != grains:
+            e.calcGrains(*grains)
+            self.grains = grains
+        if dilate and not self.dilated:
+            e.grainDilation()
+            e.kam, self.dilated = np.empty(0), True
+        if self.showList.currentText() == 'KAM' and not e.kam.size:
+            e.calcKAM()
 
-        Args:
-           figure: matplotlib figure
+
+    def _view(self) -> tuple[float, ...] | None:
+        """Visible area of a zoomed map.
+
+        Returns:
+           xmin, xmax, ymin, ymax in [um]; None for the whole map or a pole figure
         """
-        if self.canvas is not None:
-            self.plotLayout.removeWidget(self.canvas)
-            self.canvas.setParent(None)
-        if self.toolbar is not None:
-            self.plotLayout.removeWidget(self.toolbar)
-            self.toolbar.setParent(None)
-        if self.placeholder is not None:
-            self.plotLayout.removeWidget(self.placeholder)
-            self.placeholder.setParent(None)
-            self.placeholder = None
-        self.canvas = FigureCanvasQTAgg(figure)
-        self.canvas.mpl_connect('button_press_event', self.addUnitCellOverlay)
-        self.toolbar = NavigationToolbar2QT(self.canvas, self.plotHolder)
-        self.plotLayout.addWidget(self.toolbar)
-        self.plotLayout.addWidget(self.canvas)
+        if self.figure is None or self.home is None or self.showList.currentText() == 'PF':
+            return None
+        ax = self.figure.axes[0]
+        view = (*sorted(ax.get_xlim()), *sorted(ax.get_ylim()))
+        return None if np.allclose(view, self.home) else view
+
+
+    def _code(self) -> tuple[list[str], list[str], list[str], list[str]]:
+        """Python code for the current choices: analysis, mask, crop and plot lines.
+
+        Returns:
+           lists of lines
+        """
+        e = self.ebsd
+        assert e is not None
+        show, choice1, choice2 = self.showList.currentText(), self.choice1.currentText(), self.choice2.currentData()
+        analysis, mask, crop = [], [], []
+        if self.dilation.isChecked() or choice1 == 'grains':
+            analysis += ['# grains: neighbors misoriented less than tolerance [°] are linked; at least minSize points',
+                         f'emap.calcGrains(tolerance={self.tolerance.value():g}, minSize={self.minSize.value()})']
+        if self.dilation.isChecked():
+            analysis += ['# grain dilation: fill points without grain from their neighbors (in place)',
+                         'emap.grainDilation()']
+        if show == 'KAM':
+            analysis += ['# kernel average misorientation [°]: mean misorientation to the nearest neighbors',
+                         'emap.calcKAM()']
+        if self.minCI.value() > 0:
+            mask += [f'# hide points with a confidence index of {self.minCI.value():g} or less (black)',
+                     f'emap.maskCI({self.minCI.value():g})']
+        if show == 'PF' and choice2 and choice2[1] is not None:
+            mask += [f'# only phase {choice2[1]}', f'emap.mask &= emap.phaseID == {choice2[1]}']
+        if view := self._view():
+            crop += ['# crop to the zoomed view: xmin, ymin, xmax, ymax [µm]',
+                     f'emap.cropVMask({view[0]:.4g}, {view[2]:.4g}, {view[1]:.4g}, {view[3]:.4g})']
+        if show == 'IPF':
+            plot = [f'# inverse pole figure map: color shows the crystal direction along {choice1}',
+                    f"fig = emap.plotIPF('{choice1}', show=False)"]
+        elif show == 'PF':
+            plot = [f'# {{{choice1}}} pole figure, oriented as the map: X right, Y down',
+                    f'fig = emap.plotPF(axis={[int(i) for i in choice1]}, points={choice2[0]}, show=False)']
+        elif show == 'KAM':
+            plot = ['# KAM map [°]; unindexed points are black',
+                    f"fig = emap.plot(emap.kam, vmax={choice1.rstrip('°')}, show=False)"]
+        elif choice1 == 'grains':
+            plot = ['# grain map: 20 colors repeat; points without grain are black',
+                    "cmap = colormaps['tab20'].with_extremes(bad='k')",
+                    'fig = emap.plot(np.where(emap.grainID > 0, emap.grainID % 20, np.nan), cmap=cmap, cbar=False, '
+                    'show=False)']
+        elif choice1 == 'phase':
+            labels = [f'{k}: {sym.lattice or "unknown"}' for k, sym in enumerate(e.sym[1:], 1)] or ['1: unknown']
+            plot = ['# phase map: one color per phase; not identified points are black',
+                    f"cmap = ListedColormap(colormaps['tab10'].colors[:{len(labels)}]).with_extremes(bad='k')",
+                    'fig = emap.plot(np.where(emap.phaseID > 0, emap.phaseID, np.nan), cmap=cmap, vmin=0.5, '
+                    f'vmax={len(labels)}.5, cbar=False, show=False)',
+                    'fig.axes[0].legend(handles=[Patch(color=cmap(i), label=label) for i, label in '
+                    f'enumerate({labels!r})])']
+        elif choice1 == 'IQ':
+            vector = 'bc' if e.bc.size and not e.iq.any() else 'iq'  # Oxford files: band contrast
+            plot = [f'# {"band contrast" if vector == "bc" else "image quality"} map',
+                    f'fig = emap.plot(emap.{vector}, show=False)']
+        else:
+            plot = ['# confidence index map', 'fig = emap.plot(emap.ci, show=False)']
+        if scale := self._cellScale():
+            plot += ['# unit cells at the clicked points, seen from above the sample'] + \
+                    [f'emap.addUnitCellOverlay(fig.axes[0], {x:.4g}, {y:.4g}, scale={scale:.3g})'
+                     for x, y in self.cells]
+        if show != 'PF':
+            plot += ['# map without axes, with scale bar', "fig.axes[0].axis('off')",
+                     'emap.addScaleBarOverlay(fig.axes[0])']
+        return analysis, mask, crop, plot
 
 
     def _refreshCode(self) -> None:
-        """Write Python code that reproduces the current plot into the code tab."""
-        if self.ebsd is None:
+        """Write the Python code that reproduces the plot in full detail."""
+        if self.ebsd is None or self.filePath is None:
             return
-        lines = ['from ebsdlab import EBSD', 'import matplotlib.pyplot as plt', '',
-                 f'emap = EBSD({str(self.filePath)!r})',
-                 'emap.maskReset()', f'emap.setVMask({self.downsample.value()})']
-        if self.ciEnabled.isChecked():
-            lines.append(f'emap.maskCI({self.ciThreshold.value()})')
-        if self.cropEnabled.isChecked():
-            xmin, xmax = self.cropX.values()
-            ymin, ymax = self.cropY.values()
-            lines.append(f'emap.cropVMask({xmin}, {ymin}, {xmax}, {ymax})')
-        plotType = self.plotType.currentText()
-        if plotType == 'CI map':
-            lines.append('fig = emap.plot(emap.ci, show=False)')
-        elif plotType == 'IPF map':
-            lines.append(
-                f'fig = emap.plotIPF(direction={self.subplotStyle.currentText()!r}, show=False)'
-            )
-            for x, y, scale in self.overlays:
-                lines.append(
-                    f'emap.addUnitCellOverlay(fig.axes[0], {x:.6g}, {y:.6g}, scale={scale:.6g})'
-                )
-        else:
-            lines.append(f'fig = emap.plotPF(axis={self.subplotStyle.currentText()}, show=False)')
-        if plotType != 'Pole figure':
-            lines.append('fig.subplots_adjust(left=0.0125, right=0.99, bottom=0.0125, top=0.99)')
-        if self.scaleBar.isChecked() and plotType != 'Pole figure':
-            lines.append('emap.addScaleBarOverlay(fig.axes[0])')
-        if self.hideAxes.isChecked() and plotType != 'Pole figure':
-            lines.append("fig.axes[0].axis('off')")
-        lines.extend(['plt.show()', ''])
-        self.code.setPlainText('\n'.join(lines))
+        analysis, mask, crop, plot = self._code()
+        name = '_'.join([self.filePath.stem, self.showList.currentText(), self.choice1.currentText().rstrip('°')])
+        lines = ['# load the map; phase 0 = not identified, phases are numbered 1, 2, ...',
+                 f'emap = EBSD({str(self.filePath)!r})'] + analysis + mask + crop + plot + \
+                ['# save the figure', f"plt.savefig('{name}.png', dpi=300, bbox_inches='tight')", '']
+        self.code.setPlainText('\n'.join(['# EBSD plot generated by ebsdlab-gui'] + imports(lines) + [''] + lines))
+
+
+    def _setFigure(self, figure: Any, full: bool) -> None:
+        """Show a new figure with its toolbar; a map preview keeps the zoomed view of the previous map.
+
+        Args:
+           figure: matplotlib figure
+           full: full detail, cropped to the view
+        """
+        view = self._view()
+        for widget in (self.canvas, self.toolbar):
+            if widget is not None:
+                self.plotLayout.removeWidget(widget)
+                widget.setParent(None)
+        if self.figure is not None:
+            plt.close(self.figure)
+        self.figure = figure
+        self.canvas = FigureCanvasQTAgg(figure)
+        self.canvas.mpl_connect('button_press_event', self.addUnitCell)
+        self.toolbar = NavigationToolbar2QT(self.canvas, self.plotHolder)
+        self.plotLayout.addWidget(self.toolbar)
+        self.plotLayout.addWidget(self.canvas)
+        if self.showList.currentText() == 'PF':
+            self.home = None
+            return
+        ax = figure.axes[0]
+        if not full:
+            self.home = (*sorted(ax.get_xlim()), *sorted(ax.get_ylim()))
+            if view:
+                self.toolbar.push_current()  # home button: whole map
+                ax.set_xlim(view[0], view[1])
+                ax.set_ylim(view[3], view[2])  # y down
+                self.toolbar.push_current()
+        for name in ('xlim_changed', 'ylim_changed'):  # the crop in the code follows the view
+            ax.callbacks.connect(name, lambda _: self._refreshCode())
 
 
 def main() -> int:
