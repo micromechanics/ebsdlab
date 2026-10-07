@@ -520,7 +520,7 @@ class EBSD:  # pylint: disable=too-many-public-methods
 
 
     def calcKAM(self) -> None:
-        """calculate Kerner Average Misorientation in DEGREES (because user focused) from the nearest neighbors"""
+        """calculate Kernel Average Misorientation in DEGREES (because user focused) from the nearest neighbors"""
         startTime = time.time()
         _, angles = self._neighborMisorientations()
         self.kam = np.degrees(np.nanmean(angles, axis=1))

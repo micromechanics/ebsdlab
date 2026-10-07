@@ -10,6 +10,7 @@ Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in s
       - can be removed just before final plotting
   - verified with the OIM software and mTex
   - grain reconstruction and grain dilation, which fills unindexed points
+  - kernel average misorientation (KAM)
   - separate crystal orientation and plotting of it
   - some educational plotting
   - examples and documentation

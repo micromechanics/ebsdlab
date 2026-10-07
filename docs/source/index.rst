@@ -15,6 +15,7 @@ Features
 - verified with the OIM software and mTex (:ref:`verification`); heavily tested for cubic
 - one sample frame for all vendors (:ref:`conventions`)
 - grain reconstruction and grain dilation, which fills unindexed points
+- kernel average misorientation (KAM)
 - separate crystal orientation and plotting of it; some educational plotting
 - graphical user interface ``ebsdlab-gui``
 - minimal requirements on libraries

@@ -126,6 +126,20 @@ the file to undo.
    e.plot(np.where(e.grainID > 0, e.grainID % 20, np.nan), cmap=cmap, cbar=False)
 
 
+Kernel average misorientation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``calcKAM`` stores in ``e.kam`` the mean misorientation (degrees, symmetry reduced) of each point to its nearest
+neighbors; unindexed points are NaN and black.
+
+.. jupyter-execute::
+
+   from ebsdlab.ebsd import EBSD
+   e = EBSD("../tests/DataFiles/EBSD.ang")
+   e.calcKAM()
+   e.plot(e.kam, vmax=5)
+
+
 Writing data
 ------------
 
