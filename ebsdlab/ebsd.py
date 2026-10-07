@@ -50,6 +50,7 @@ class EBSD:  # pylint: disable=too-many-public-methods
         self.ri: np.ndarray        = np.empty(0)
         self.grainID: np.ndarray   = np.empty(0)
         self.kam: np.ndarray       = np.empty(0)  # set by calcKAM
+        self.cleaned: np.ndarray   = np.empty(0)  # set by grainDilation: points that were changed
         self.width     = 0.0
         self.height    = 0.0
         self.ratio     = 0.0
@@ -556,6 +557,39 @@ class EBSD:  # pylint: disable=too-many-public-methods
         self.grainID = (np.cumsum(keep)*keep).astype(np.uint32)[labels]
         print('   Number of grains:', int(keep.sum()))
         print('Duration grain identification: ', int(np.round(time.time()-startTime)), 'sec')
+        return
+
+
+    def grainDilation(self) -> None:
+        """fill points without grain (grainID 0) from the neighbors, in place (reload to undo); runs calcGrains with
+        default arguments if it has not run. A point joins the grain of the majority of its neighbors that have a grain
+        and takes phase, orientation, CI and mask of the neighbor with the highest CI among them; this also decides
+        ties.
+        Repeat until nothing changes. Changed points are True in self.cleaned.
+        """
+        startTime = time.time()
+        if not self.grainID.size:
+            self.calcGrains()
+        neighbors = self.neighbors()
+        self.cleaned = self.grainID == 0
+        while True:
+            grains  = np.where(neighbors >= 0, self.grainID[neighbors], 0)
+            points  = np.flatnonzero((self.grainID == 0) & (grains > 0).any(axis=1))
+            if not points.size:
+                break
+            grains  = grains[points]
+            votes   = ((grains[:, :, None] == grains[:, None, :]) & (grains[:, None, :] > 0)).sum(axis=2)
+            ciVotes = np.where((grains > 0) & (votes == votes.max(axis=1, keepdims=True)),
+                               self.ci[neighbors[points]], -np.inf)
+            source  = neighbors[points, np.argmax(ciVotes, axis=1)]
+            self.grainID[points]     = self.grainID[source]
+            self.phaseID[points]     = self.phaseID[source]
+            self.quaternions[points] = self.quaternions[source]
+            self.ci[points]          = self.ci[source]
+            self.mask[points]        = self.mask[source]
+        self.cleaned &= self.grainID > 0
+        print('   Number of points changed:', int(self.cleaned.sum()))
+        print('Duration grain dilation: ', int(np.round(time.time()-startTime)), 'sec')
         return
 
 

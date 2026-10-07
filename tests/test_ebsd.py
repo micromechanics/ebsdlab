@@ -154,6 +154,20 @@ def test_calc_grains(fileName):
         assert len(np.unique(ebsd.phaseID[grainID == grain])) == 1
 
 
+@pytest.mark.parametrize('fileName', ['EBSD.ang', 'AZ31B.ang'])
+def test_grain_dilation(fileName):
+    """Smoke test: dilation fills all points without grain, keeps the grains and gives the filled points a CI."""
+    ebsd = EBSD(DATA_DIR/fileName)
+    ebsd.calcGrains()
+    before = ebsd.grainID.copy()
+    ebsd.grainDilation()
+    assert np.all(ebsd.grainID > 0)
+    assert ebsd.grainID.max() == before.max()
+    assert np.all(ebsd.grainID[before > 0] == before[before > 0])
+    assert np.array_equal(ebsd.cleaned, before == 0)
+    assert np.all(ebsd.ci[ebsd.cleaned] != -1)
+
+
 @pytest.mark.mpl_image_compare(savefig_kwargs={'bbox_inches': 'tight'})
 @pytest.mark.parametrize('direction', ['ND', 'TD'])
 def test_ebsd_verification_ipf(direction):
