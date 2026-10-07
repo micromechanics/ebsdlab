@@ -42,7 +42,7 @@ class EBSD:  # pylint: disable=too-many-public-methods
         self.phaseID: np.ndarray   = np.empty(0)
         self.semSignal: np.ndarray = np.empty(0)
         self.fit: np.ndarray       = np.empty(0)
-        # only some formats: Oxford band contrast/slope, bands, error, reliability index; OIM grain ID
+        # only some formats: Oxford band contrast/slope, bands, error, reliability index; OIM grain ID (or calcGrains)
         self.bc: np.ndarray        = np.empty(0)
         self.bs: np.ndarray        = np.empty(0)
         self.bands: np.ndarray     = np.empty(0)
@@ -571,9 +571,11 @@ class EBSD:  # pylint: disable=too-many-public-methods
         if not self.grainID.size:
             self.calcGrains()
         neighbors = self.neighbors()
+        # missing neighbors (-10): the point itself, which has no grain and therefore no vote
+        neighbors = np.where(neighbors >= 0, neighbors, np.arange(self.nPoints)[:, None])
         self.cleaned = self.grainID == 0
         while True:
-            grains  = np.where(neighbors >= 0, self.grainID[neighbors], 0)
+            grains  = self.grainID[neighbors]
             points  = np.flatnonzero((self.grainID == 0) & (grains > 0).any(axis=1))
             if not points.size:
                 break
@@ -600,6 +602,8 @@ class EBSD:  # pylint: disable=too-many-public-methods
            neighbors (see neighbors()), angles in radians; nan for invalid, unindexed or other-phase neighbors
         """
         neighbors = self.neighbors()
+        # for indexing, missing neighbors (-10) are the point itself; their angles are nan below
+        safe   = np.where(neighbors >= 0, neighbors, np.arange(len(neighbors))[:, None])
         angles = np.full(neighbors.shape, np.nan)
         for phase, sym in enumerate(self.sym):
             points = np.flatnonzero(self.phaseID == phase)
@@ -608,12 +612,11 @@ class EBSD:  # pylint: disable=too-many-public-methods
             # scalar part of misQ*s for all symmetries s: dot product with (-s_x, -s_y, -s_z, s_w)
             symQ = sym.symmetryQuats().as_quat() * [-1, -1, -1, 1]
             for iNeighbor in range(neighbors.shape[1]):
-                misQ = multiply(self.quaternions[points].inv(), self.quaternions[neighbors[points, iNeighbor]])
+                misQ = multiply(self.quaternions[points].inv(), self.quaternions[safe[points, iNeighbor]])
                 scalar = np.abs(misQ.as_quat() @ symQ.T).max(axis=1)
                 angles[points, iNeighbor] = 2*np.arccos(np.clip(scalar, 0., 1.))
-        # -10 would index points at the end of the map
-        angles[(neighbors < 0) | (self.phaseID[neighbors] != self.phaseID[:, None])] = np.nan
-        angles[self.ci[neighbors] == -1.0] = np.nan
+        angles[(neighbors < 0) | (self.phaseID[safe] != self.phaseID[:, None])] = np.nan
+        angles[self.ci[safe] == -1.0] = np.nan
         angles[self.ci == -1.0] = np.nan
         return neighbors, angles
 

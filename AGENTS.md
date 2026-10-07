@@ -33,7 +33,7 @@
   2. Add a side-by-side `tests/baseline_review/side_by_side.png` (matplotlib, baseline left, result right, one row
      per changed test); for new behaviour not covered by a test, add panels showing it, with timings if speed changed.
   3. Look at the images yourself, then report what differs and why; do not commit `tests/baseline_review/`.
-  4. Only after approval copy each `result.png` to `tests/baseline/<test>.png`; rerun the tests. The docs reference ebsdlab images directly from `tests/baseline/`; `docs/source/_static/` holds only external references (OIM, MTEX) and drawings.
+  4. Only after approval copy each `result.png` to `tests/baseline/<test>.png`; rerun the tests. The docs reference ebsdlab images directly from `tests/baseline/`; `docs/source/_static/` holds only external references (OIM, MTEX), drawings and generated images (`hero.png` from `docs/make_hero.py`, run from `docs/`).
 - Prefer NumPy/SciPy APIs over ad hoc numerical code when they make behavior clearer.
 - `phaseID` is `uint8`: 0 = not identified (`self.sym[0]` is `Symmetry()`), phases are numbered from 1 and
   `self.sym[k]` is the symmetry of phase `k`. Loaders convert file conventions to this; `writeANG` converts back.

@@ -26,6 +26,8 @@ Data in the map
      - band contrast (Oxford)
    * - ``e.phaseID``
      - phase of each point: 0 not identified, 1, 2, ... phases; symmetry of phase k: ``e.sym[k]``
+   * - ``e.grainID``
+     - grain of each point: 0 no grain, 1, 2, ... grains; from ``calcGrains`` or an OIM grain file
 
 IPF maps, pole figures, unit-cell overlays and KAM use the symmetry of each point's phase.
 
@@ -97,6 +99,31 @@ Mean orientation of all points (slow; averaging over several grains is only a de
        Orients.append(Orientation(quaternion=e.quaternions[i], symmetry="cubic"))
    avg = Orientation.average(Orients)
    print("Average orientation", np.round(avg.asEulers(degrees=True, standardRange=True), 0))
+
+
+Grains
+~~~~~~
+
+``calcGrains`` links neighbors that are indexed, of one phase and misoriented less than ``tolerance`` (degrees);
+grains are the connected regions. A grain needs at least ``minSize`` points and has to span at least ``minNRows``
+rows and columns; points outside of grains have ``grainID`` 0 and are black.
+
+``grainDilation`` then fills the points without grain, in place: a point joins the grain of most of its neighbors
+and takes phase, orientation, CI and mask of the neighbor in that grain with the highest CI; this repeats until nothing
+changes. It removes wild spikes and fills unindexed points; changed points are ``True`` in ``e.cleaned``. Reload
+the file to undo.
+
+.. jupyter-execute::
+
+   import numpy as np
+   from matplotlib import colormaps
+   from ebsdlab.ebsd import EBSD
+   cmap = colormaps["tab20"].with_extremes(bad="k")  # 20 colors, no grain in black
+   e = EBSD("../tests/DataFiles/EBSD.ang")
+   e.calcGrains(tolerance=5, minSize=6, minNRows=2)
+   e.plot(np.where(e.grainID > 0, e.grainID % 20, np.nan), cmap=cmap, cbar=False)
+   e.grainDilation()
+   e.plot(np.where(e.grainID > 0, e.grainID % 20, np.nan), cmap=cmap, cbar=False)
 
 
 Writing data

@@ -9,6 +9,7 @@ Electron Backscatter Diffraction (EBSD) is a microanalytical technique used in s
       - increases speed in intermediate test plots
       - can be removed just before final plotting
   - verified with the OIM software and mTex
+  - grain reconstruction and grain dilation, which fills unindexed points
   - separate crystal orientation and plotting of it
   - some educational plotting
   - examples and documentation
@@ -99,8 +100,6 @@ conventions, verification against OIM and MTEX, design scope, and development (t
 
 ## FAQ
 ### Future features
-  - improve cleaning
-  - grain identification methods
   - speed up simulation
   - test non-cubic symmetries further: example data covers hexagonal, trigonal, orthorhombic, monoclinic and
     triclinic phases; only hexagonal has image tests
@@ -109,7 +108,6 @@ conventions, verification against OIM and MTEX, design scope, and development (t
  - sample files with tetragonal phases
  - feedback on tutorials
  - any feedback on functionality
- - help with cleaning and grain identification
 
 
 ## Issues

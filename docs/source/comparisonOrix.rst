@@ -23,8 +23,8 @@ Advantages of ebsdlab
   CI/crop/preview filters, places unit-cell overlays, and copies the equivalent Python code.
 - **Fast maps and previews:** maps are drawn directly from the scan grid, without interpolation;
   the virtual mask (``vMask``) crops the view or gives coarse previews for quick intermediate plots.
-- **Built-in analysis and plotting:** KAM, unit-cell overlays on IPF maps, scale bars, and
-  educational plots such as the standard triangle and unit-cell plots.
+- **Built-in analysis and plotting:** KAM, grain reconstruction and dilation, unit-cell overlays on IPF maps, scale
+  bars, and educational plots such as the standard triangle and unit-cell plots.
 - **Verified:** results are compared against OIM and mTex for cubic materials (:ref:`verification`).
 - **Simple:** small code base, Bunge Euler angles only; easy to read and to use for teaching.
 

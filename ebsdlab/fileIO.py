@@ -271,9 +271,9 @@ def loadTXT(ebsd: EBSD, fileName: str = '', update: bool = False) -> None:
         if 'sem' in foundKeys:
             ebsd.semSignal[idx] = data[:, foundKeys['sem'] - 1]
         if 'Grain' in foundKeys:
-            if not ebsd.grainID.size:
-                ebsd.grainID = np.full(ebsd.nPoints, -1)
-            ebsd.grainID[idx] = data[:, foundKeys['Grain'] - 1]
+            if not ebsd.grainID.size:  # points not in the file have no grain: 0
+                ebsd.grainID = np.zeros(ebsd.nPoints, dtype=np.uint32)
+            ebsd.grainID[idx] = np.maximum(data[:, foundKeys['Grain'] - 1], 0)
         # stepSizeX, width, height etc do not change
     else:  # read new
         ebsd.phi1 = data[:, foundKeys['phi1,'] - 1].astype(np.float16)
@@ -293,7 +293,7 @@ def loadTXT(ebsd: EBSD, fileName: str = '', update: bool = False) -> None:
         if 'sem' in foundKeys:
             ebsd.semSignal = data[:, foundKeys['sem'] - 1].astype(np.float16)
         if 'Grain' in foundKeys:
-            ebsd.grainID = data[:, foundKeys['Grain'] - 1].astype(int)
+            ebsd.grainID = np.maximum(data[:, foundKeys['Grain'] - 1], 0).astype(np.uint32)  # as calcGrains: 0 no grain
         ebsd.mask   = np.ones_like(x, dtype=bool)
         ebsd.width  = max(x)
         ebsd.height = max(y)
