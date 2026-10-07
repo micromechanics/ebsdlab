@@ -35,6 +35,10 @@
   3. Look at the images yourself, then report what differs and why; do not commit `tests/baseline_review/`.
   4. Only after approval copy each `result.png` to `tests/baseline/<test>.png`; rerun the tests. The docs reference ebsdlab images directly from `tests/baseline/`; `docs/source/_static/` holds only external references (OIM, MTEX), drawings and generated images (`hero.png` from `docs/make_hero.py`, run from `docs/`).
 - Prefer NumPy/SciPy APIs over ad hoc numerical code when they make behavior clearer.
+- Exception, by design: for rotations of whole maps use the NumPy quaternion helpers in `ebsdlab/_rotation.py`
+  (`multiply`, `fromBungeEulers`), not SciPy's `Rotation.__mul__` / `Rotation.from_euler`. They are about 5×
+  faster (240k points: 0.03 s vs 0.15 s). Do not switch back to SciPy, also not to make output byte-identical: the
+  two differ in the last bit, which only changes values on exact rounding ties (e.g. float16 angles in `writeANG`).
 - `phaseID` is `uint8`: 0 = not identified (`self.sym[0]` is `Symmetry()`), phases are numbered from 1 and
   `self.sym[k]` is the symmetry of phase `k`. Loaders convert file conventions to this; `writeANG` converts back.
 - Keep imported OSC Euler angles and scalar data as `float16` unless a task explicitly requires higher precision. This is a deliberate memory/performance trade-off for large maps: EBSD indexing angular accuracy is typically no better than about 0.1°, so retaining `float32` input precision does not usually improve the physical result.

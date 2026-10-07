@@ -4,7 +4,6 @@ import math
 from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import interp1d
 from scipy.spatial.transform import Rotation
 from ._rotation import asRodrigues
 
@@ -193,43 +192,25 @@ class Symmetry:
         if self.lattice != 'cubic':
             print('ERROR: only implemented for cubic lattice')
             return None
-        # create border
-        borderPoints = [[0.0, 0.0]]
-        xTemp = []
-        yTemp = []
-        for a in range(16):
-            borderPoints.append([math.cos(a/180.0*math.pi)*math.sqrt(2.0) - 1,
-                                 math.sin(a/180.0*math.pi)*math.sqrt(2.0)])
-            xTemp.append(math.cos(a/180.0*math.pi)*math.sqrt(2.0)-1)
-            yTemp.append(math.sin(a/180.0*math.pi)*math.sqrt(2))
-        borderPoints.append([0.0, 0.0])
-        border = np.array(borderPoints)
-        func = interp1d(yTemp, xTemp)  # function yTemp=func(xTemp)
-        # create colored background
-        xyPoints = []
-        for iY in np.arange(0, 0.366025403784, stepSize):
-            for iX in np.arange(iY, 0.41421, stepSize):
-                if func(iY) <= iX:
-                    continue
-                xyPoints.append([iX, iY])
-        xy = np.array(xyPoints)
-
-        hkl = self.xyToHKL(xy.T)
+        # border: [100]-[110] line and the arc from [110] to [111] (0 to 15 degrees)
+        angles = np.radians(np.arange(16))
+        arcX, arcY = np.cos(angles)*np.sqrt(2.0) - 1, np.sin(angles)*np.sqrt(2.0)
+        border = np.vstack(([0.0, 0.0], np.column_stack((arcX, arcY)), [0.0, 0.0]))
+        # colored background: grid points between the [100]-[111] line (x >= y) and the arc
+        y, x = (a.ravel() for a in np.meshgrid(np.arange(0, 0.366025403784, stepSize),
+                                               np.arange(0, 0.41421, stepSize), indexing='ij'))
+        inside = (x >= y) & (x < np.interp(y, arcY, arcX))
+        xy = np.stack((x[inside], y[inside]))
+        hkl = self.xyToHKL(xy)
         assert hkl is not None
         _, rgb = self.inSST(hkl, color=True, proper=False)
-        colors = []
-        for i in range(rgb.shape[1]):
-            values = (rgb[:, i]*255).astype(int)
-            string = f'#{values[0]:02x}{values[1]:02x}{values[2]:02x}'
-            colors.append(string)
         # plotting: background, border, labels
         fig, ax = plt.subplots()
-        ax.scatter(xy[:, 0], xy[:, 1], c=colors, s=15000. *stepSize, linewidths=0)
+        ax.scatter(xy[0], xy[1], c=rgb.T, s=15000. *stepSize, linewidths=0)
         ax.plot(border[:, 0], border[:, 1], '-k', linewidth=3)
-        plt.rcParams['font.size'] = 18.
-        ax.text(0, 0, '[100]', horizontalalignment='right')
-        ax.text(0.42, 0, '[110]')
-        ax.text(0.37, 0.37, '[111]')
+        ax.text(0, 0, '[100]', horizontalalignment='right', fontsize=18)
+        ax.text(0.42, 0, '[110]', fontsize=18)
+        ax.text(0.37, 0.37, '[111]', fontsize=18)
         ax.axis('off')
         ax.axis('equal')
         showOrSave(fileName, show)
@@ -357,37 +338,9 @@ class Symmetry:
         Returns:
            True if inside the fundamental zone
         """
-        rawRodrigues = np.asarray(asRodrigues(rotation), dtype=float)
-        # fundamental zone in Rodrigues space is point symmetric around origin
-        rodrigues = abs(rawRodrigues)
-        if self.lattice == 'cubic':
-            limit = math.sqrt(2.0) - 1.0
-            return bool(limit >= rodrigues[0] and limit >= rodrigues[1] and limit >= rodrigues[2]
-                        and 1.0 >= rodrigues[0] + rodrigues[1] + rodrigues[2])
-        if self.lattice == 'hexagonal':
-            return bool(
-                1.0 >= rodrigues[0] and 1.0 >= rodrigues[1] and 1.0 >= rodrigues[2]
-                and 2.0 >= math.sqrt(3.0)*rodrigues[0] + rodrigues[1]
-                and 2.0 >= math.sqrt(3.0)*rodrigues[1] + rodrigues[0]
-                and 2.0 >= math.sqrt(3.0) + rodrigues[2]
-            )
-        if self.lattice == 'tetragonal':
-            return bool(
-                1.0 >= rodrigues[0] and 1.0 >= rodrigues[1]
-                and math.sqrt(2.0) >= rodrigues[0] + rodrigues[1]
-                and math.sqrt(2.0) >= rodrigues[2] + 1.0
-            )
-        if self.lattice == 'orthorhombic':
-            return bool(1.0 >= rodrigues[0] and 1.0 >= rodrigues[1] and 1.0 >= rodrigues[2])
-        if self.lattice in {'monoclinic', 'triclinic', 'trigonal'}:
-            # The Voronoi region of identity is the fundamental zone for
-            # these lower-symmetry proper rotation groups.
-            magnitude = np.linalg.norm(rawRodrigues)
-            rotation = (Rotation.from_rotvec(2.0 * math.atan(magnitude) * rawRodrigues / magnitude)
-                        if magnitude else Rotation.identity())
-            magnitudes = (rotation * self.symmetryQuats()).magnitude()
-            return bool(magnitudes[0] <= np.min(magnitudes) + 1e-12)
-        return True
+        # the FZ of a proper rotation group is the Voronoi region of identity: no equivalent rotation is smaller
+        magnitudes = (rotation * self.symmetryQuats()).magnitude()
+        return bool(magnitudes[0] <= np.min(magnitudes) + 1e-12)
 
 
     def inDisorientationSST(self, rotation: Rotation) -> bool:
@@ -469,7 +422,6 @@ class Symmetry:
                 else:
                     useOpposite = ~inSST & oppositeSST
                     theComponents[:, useOpposite] = oppositeComponents[:, useOpposite]
-                inSST = inSST | oppositeSST
             inSST = np.all(theComponents >= -SST_TOLERANCE, axis=0)
         # have to return color array
         if color:
@@ -479,8 +431,6 @@ class Symmetry:
                 rgb = np.power(np.abs(theComponentsNorm), 0.5)
                 if rgb.ndim > 1:
                     rgb[:, ~inSST] = 0.0
-                # limit to maximum intensity
-                rgb[rgb > 1.0] = 1.0
                 if rgb.ndim > 1:
                     # normalize to (HS)V = 1
                     rgb[:, inSST] /= np.max(rgb[:, inSST], axis=0)
@@ -506,24 +456,7 @@ class Symmetry:
             return None
         inPlane = np.asarray(inPlane, dtype=float)
         l = 2.0 / (inPlane[0]*inPlane[0] + inPlane[1]*inPlane[1] + 1.)
-        if inPlane.ndim == 1:
-            hkl = np.zeros(3, dtype=float)
-            hkl[:2] = l*inPlane
-            hkl[2] = l-1.0
-        else:
-            hkl = np.zeros((3, inPlane.shape[1]), dtype=float)
-            hkl[:2, :] = l*inPlane
-            hkl[2, :] = l-1.0
-        return hkl
-
-
-    def __copy__(self) -> 'Symmetry':
-        """Return a symmetry with the same lattice.
-
-        Returns:
-           new symmetry
-        """
-        return self.__class__(self.lattice)
+        return np.concatenate((l*inPlane, np.asarray(l-1.0)[None]))
 
 
     def __repr__(self) -> str:

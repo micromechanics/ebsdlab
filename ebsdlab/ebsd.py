@@ -1,6 +1,5 @@
 """EBSD class: read, analyze and plot EBSD maps"""
 import math
-import time
 from pathlib import Path
 from typing import Any
 import matplotlib.pyplot as plt
@@ -10,7 +9,6 @@ from matplotlib import colormaps, colors
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.font_manager import FontProperties
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
-from scipy.interpolate import griddata
 from scipy.sparse import coo_array
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial.transform import Rotation
@@ -42,12 +40,8 @@ class EBSD:  # pylint: disable=too-many-public-methods
         self.phaseID: np.ndarray   = np.empty(0)
         self.semSignal: np.ndarray = np.empty(0)
         self.fit: np.ndarray       = np.empty(0)
-        # only some formats: Oxford band contrast/slope, bands, error, reliability index; OIM grain ID (or calcGrains)
+        # only some formats: Oxford band contrast; OIM grain ID (or calcGrains)
         self.bc: np.ndarray        = np.empty(0)
-        self.bs: np.ndarray        = np.empty(0)
-        self.bands: np.ndarray     = np.empty(0)
-        self.error: np.ndarray     = np.empty(0)
-        self.ri: np.ndarray        = np.empty(0)
         self.grainID: np.ndarray   = np.empty(0)
         self.kam: np.ndarray       = np.empty(0)  # set by calcKAM
         self.cleaned: np.ndarray   = np.empty(0)  # set by grainDilation: points that were changed
@@ -64,7 +58,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
         self.nColsEven   = 0  # points in 2nd, 4th, ... row
         self.x0, self.y0 = 0.0, 0.0
         self.xOffset     = 0.0  # x-shift of even rows: stepSizeX/2 for hexagonal grids
-        startTime        = time.time()
         self.scanUnit    = 'um'
         self.sym: list[Symmetry] = []  # loaders add phase 1, 2, ...
         self._gridIndex: np.ndarray | None = None  # set by setGrid for unordered or partial maps
@@ -116,15 +109,10 @@ class EBSD:  # pylint: disable=too-many-public-methods
         self.mask              = self.ci > -1  # all are visible initially
         self.vMask             = np.ones(self.nPoints, dtype=bool)
         self.vMaskEvery        = 1  # preview: maps show only every k-th row and column
-        print('   Duration init: ', int(np.round(time.time()-startTime)), 'sec')
-        return
 
 
-    ##
-    # @name PLOT METHODS
-    # @{
     def plot(self, vector: np.ndarray, widthPixel: int | None = None, vmax: float | None = None,
-             vmin: float | None = None, interpolationType: str = 'nearest', cmap: Any = None,
+             vmin: float | None = None, cmap: Any = None,
              show: bool = True, cbar: bool = True) -> Any:
         """given a class-vector, plot the vector as an image
 
@@ -133,7 +121,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
            widthPixel: rescale to horizontal size of the image [default: optimal pixel width]
            vmax: rescale z-scale to maximal value
            vmin: rescale z-scale to minimal value
-           interpolationType: interpolation type [default: "nearest" next-neighbor]
            cmap: colormap [default: Spectral with masked points in black]
            show: show the figure
            cbar: add a colorbar
@@ -141,13 +128,12 @@ class EBSD:  # pylint: disable=too-many-public-methods
         Returns:
            matplotlib figure
         """
-        startTime = time.time()
         # create a special cmap palette with blacK as value for bad-numbers
         if cmap is None:
             cmap = colormaps['Spectral'].with_extremes(bad='k')
-        z, self.imageExtent = self._image(vector, widthPixel, interpolationType)
+        z, self.imageExtent = self._image(vector, widthPixel)
         z = z.astype(float)
-        mask, _ = self._image(~self.mask, widthPixel, interpolationType)
+        mask, _ = self._image(~self.mask, widthPixel)
         # plot if/if-not the maximum and minimum are given
         fig, ax = plt.subplots()
         im = ax.imshow(np.ma.masked_where(mask, z), extent=self.imageExtent, cmap=cmap, vmax=vmax, vmin=vmin,
@@ -155,7 +141,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
         if cbar:
             fig.colorbar(im, ax=ax)
         print('   Plot with x and y axis in [um]')
-        print('Duration plot: ', int(np.round(time.time()-startTime)), 'sec')
         if show:
             plt.show()
         z *= 255/np.max(z)
@@ -164,7 +149,7 @@ class EBSD:  # pylint: disable=too-many-public-methods
 
 
     def plotIPF(self, direction: str | int = 'ND', widthPixel: int | None = None, fileName: str = '',
-                interpolationType: str = 'nearest', show: bool = True) -> Any:
+                show: bool = True) -> Any:
         """
         plot Inverse Pole Figure (IPF)
 
@@ -172,13 +157,11 @@ class EBSD:  # pylint: disable=too-many-public-methods
            direction: default.."ND", "RD", "TD"; a number is used as widthPixel with "ND"
            widthPixel: horizontal size of the image [default: optimal size based on data]
            fileName: save to file instead of showing
-           interpolationType: interpolation type [default: "nearest"]
            show: show the figure if no fileName is given
 
         Returns:
            matplotlib figure
         """
-        startTime = time.time()
         if direction == 'RD':
             axis = [1, 0, 0]
         elif direction == 'TD':
@@ -190,12 +173,9 @@ class EBSD:  # pylint: disable=too-many-public-methods
             axis = [0, 0, 1]
 
         # colors only for the points shown in the image
-        if interpolationType == 'nearest':
-            shown = np.zeros(self.nPoints, dtype=bool)
-            shown[self._image(np.arange(self.nPoints), widthPixel)[0]] = True
-            shown = np.flatnonzero(shown)
-        else:
-            shown = np.flatnonzero(self.vMask)
+        shown = np.zeros(self.nPoints, dtype=bool)
+        shown[self._image(np.arange(self.nPoints), widthPixel)[0]] = True
+        shown = np.flatnonzero(shown)
         rgbs = np.zeros((3, self.nPoints), dtype=float)
         for phase, sym in enumerate(self.sym):
             points = shown[self.phaseID[shown] == phase]
@@ -212,26 +192,24 @@ class EBSD:  # pylint: disable=too-many-public-methods
                     rgbsPhase[:, ~flags] = remainingRgbs
                     flags[~flags]        = remainingFlags
             rgbs[:, points] = rgbsPhase
-        fig = self.plotRGB(rgbs, widthPixel, interpolationType)
-        print('Duration plotIPF: ', int(np.round(time.time()-startTime)), 'sec')
+        fig = self.plotRGB(rgbs, widthPixel)
         showOrSave(fileName, show)
         return fig
 
 
-    def plotRGB(self, rgb: np.ndarray, widthPixel: int | None = None, interpolationType: str = 'nearest') -> Any:
+    def plotRGB(self, rgb: np.ndarray, widthPixel: int | None = None) -> Any:
         """given a RGB vector (same size as the other class vectors) plot the vector as an image
 
         Args:
            rgb: matrix [3, classVectorSize] to be plotted as a 2D image
            widthPixel: horizontal size of the image [default: optimal pixel width]
-           interpolationType: interpolation type [default: "nearest"]
 
         Returns:
            matplotlib figure
         """
         # masked points are black
         rgb[:, ~self.mask] = 0
-        image, self.imageExtent = self._image(rgb.T, widthPixel, interpolationType)
+        image, self.imageExtent = self._image(rgb.T, widthPixel)
         self.image = (image*255).astype(np.uint8)
         fig, ax = plt.subplots()
         ax.imshow(self.image, extent=self.imageExtent, origin='upper')
@@ -263,7 +241,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
         plt.close(fig)
         plt.imshow(self.image, extent=self.imageExtent, origin='upper')
         showOrSave(fileName)
-        return
 
 
     def addUnitCellOverlay(self, ax: Any, x: float, y: float, scale: float = 1., colorCube: str = 'black') -> int:
@@ -372,7 +349,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
         Returns:
           matplotlib figure
         """
-        startTime = time.time()
         fig, ax = plt.subplots()
         maxColor = tuple(np.array(colors.hex2color(color))*0.5)
         axis = np.array(axis, dtype=float)/np.linalg.norm(axis)
@@ -438,18 +414,10 @@ class EBSD:  # pylint: disable=too-many-public-methods
         ax.set_xticks([])
         ax.set_yticks([])
         ax.axis('off')
-        print('Duration plotPF: ', int(np.round(time.time()-startTime)), 'sec')
         showOrSave(fileName, show)
         return fig
 
-    # @}
 
-
-    ##
-    # @name Mask and Path routines
-    # Masked areas are plotted in black. Initially no point is part of the mask;
-    # all points are false.
-    # @{
     def maskCI(self, ci: float) -> None:
         """masked all points off, which have a CI less than: good points=False, bad points=True
 
@@ -457,20 +425,17 @@ class EBSD:  # pylint: disable=too-many-public-methods
            ci: critical CI
         """
         self.mask = self.ci > ci
-        return
 
 
     def maskReset(self) -> None:
         """reset mask"""
         self.mask = self.ci > -1
-        return
 
 
     def removePointsOutsideMask(self) -> None:
         """Set points outside the mask invalid so they are read as nonexistent by OIM after export"""
         self.ci[~self.mask] = -1.0
         self.fit[~self.mask] = 180.0
-        return
 
 
     def setVMask(self, every: int = 1) -> None:
@@ -483,7 +448,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
         self.vMask[:] = False
         self.vMask[::every] = True
         self.vMaskEvery = every
-        return
 
 
     def cropVMask(self, xmin: float | None = None, ymin: float | None = None,
@@ -500,7 +464,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
         x, y = self.xy()
         xmax, ymax = xmax or np.max(x), ymax or np.max(y)
         self.vMask = self.vMask & (x >= xmin) & (x <= xmax) & (y >= ymin) & (y <= ymax)
-        return
 
 
     def xy(self, idx: Any = None) -> tuple[np.ndarray, np.ndarray]:
@@ -521,12 +484,9 @@ class EBSD:  # pylint: disable=too-many-public-methods
 
     def calcKAM(self) -> None:
         """calculate Kernel Average Misorientation in DEGREES (because user focused) from the nearest neighbors"""
-        startTime = time.time()
         _, angles = self._neighborMisorientations()
         self.kam = np.degrees(np.nanmean(angles, axis=1))
         self.kam[self.ci == -1.0] = np.nan
-        print('Duration KAM evaluation: ', int(np.round(time.time()-startTime)), 'sec')
-        return
 
 
     def calcGrains(self, tolerance: float = 5., minSize: int = 6, minNRows: int = 2) -> None:
@@ -538,7 +498,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
            minSize: minimum number of points of a grain
            minNRows: minimum number of rows and of columns a grain spans
         """
-        startTime = time.time()
         neighbors, angles = self._neighborMisorientations()
         linked = angles < np.radians(tolerance)  # nan: not linked
         points = np.broadcast_to(np.arange(self.nPoints)[:, None], neighbors.shape)
@@ -556,8 +515,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
         keep[labels[~indexed]] = False  # unindexed points are single regions
         self.grainID = (np.cumsum(keep)*keep).astype(np.uint32)[labels]
         print('   Number of grains:', int(keep.sum()))
-        print('Duration grain identification: ', int(np.round(time.time()-startTime)), 'sec')
-        return
 
 
     def grainDilation(self) -> None:
@@ -567,19 +524,19 @@ class EBSD:  # pylint: disable=too-many-public-methods
         ties.
         Repeat until nothing changes. Changed points are True in self.cleaned.
         """
-        startTime = time.time()
         if not self.grainID.size:
             self.calcGrains()
         neighbors = self.neighbors()
         # missing neighbors (-10): the point itself, which has no grain and therefore no vote
         neighbors = np.where(neighbors >= 0, neighbors, np.arange(self.nPoints)[:, None])
         self.cleaned = self.grainID == 0
+        empty = np.flatnonzero(self.cleaned)  # only these points change; each round scans only the ones left
         while True:
-            grains  = self.grainID[neighbors]
-            points  = np.flatnonzero((self.grainID == 0) & (grains > 0).any(axis=1))
-            if not points.size:
+            grains  = self.grainID[neighbors[empty]]
+            filled  = (grains > 0).any(axis=1)
+            if not filled.any():
                 break
-            grains  = grains[points]
+            points, grains, empty = empty[filled], grains[filled], empty[~filled]
             votes   = ((grains[:, :, None] == grains[:, None, :]) & (grains[:, None, :] > 0)).sum(axis=2)
             ciVotes = np.where((grains > 0) & (votes == votes.max(axis=1, keepdims=True)),
                                self.ci[neighbors[points]], -np.inf)
@@ -591,8 +548,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
             self.mask[points]        = self.mask[source]
         self.cleaned &= self.grainID > 0
         print('   Number of points changed:', int(self.cleaned.sum()))
-        print('Duration grain dilation: ', int(np.round(time.time()-startTime)), 'sec')
-        return
 
 
     def _neighborMisorientations(self) -> tuple[np.ndarray, np.ndarray]:
@@ -621,16 +576,13 @@ class EBSD:  # pylint: disable=too-many-public-methods
         return neighbors, angles
 
 
-    def neighbors(self, idx: int | None = None) -> np.ndarray:
-        """identify the nearest neighboring indexes
-
-        Args:
-           idx: index to find [if None: calculate all]
+    def neighbors(self) -> np.ndarray:
+        """identify the nearest neighboring indexes of all points
 
         Returns:
          array of neighbors; invalid points have a value=-10
         """
-        i        = np.arange(self.nPoints) if idx is None else np.atleast_1d(idx)
+        i        = np.arange(self.nPoints)
         period   = self.nColsOdd + self.nColsEven
         pair, j  = np.divmod(i, period)
         even     = (j >= self.nColsOdd).astype(int)  # 2nd row of the pair of rows
@@ -648,10 +600,7 @@ class EBSD:  # pylint: disable=too-many-public-methods
         neighbors = (nRow//2)*period + (nRow % 2)*self.nColsOdd + nCol
         valid     = (nRow >= 0) & (nRow < self.nRows) & (nCol >= 0) & (nCol < rowLength) & (neighbors < self.nPoints)
         neighbors[~valid] = -10
-        if idx is not None:
-            return neighbors[0]
         return neighbors
-    # @}
 
 
     def writeANG(self, fileName: str) -> None:
@@ -736,17 +685,15 @@ class EBSD:  # pylint: disable=too-many-public-methods
         period          = self.nColsOdd + self.nColsEven
         self.nPoints    = (self.nRows//2)*period + (self.nRows % 2)*self.nColsOdd
         self._gridIndex = (row//2)*period + even*self.nColsOdd + col
-        return
 
 
-    def _image(self, values: np.ndarray, widthPixel: int | None = None,
-               interpolationType: str = 'nearest') -> tuple[np.ndarray, tuple[float, float, float, float]]:
+    def _image(self, values: np.ndarray,
+               widthPixel: int | None = None) -> tuple[np.ndarray, tuple[float, float, float, float]]:
         """Sample per-point values onto the pixels of an image of the visible area
 
         Args:
            values: one value (or one row of values) per point
            widthPixel: horizontal size of the image [default: one pixel per step; half a step for hexagonal grids]
-           interpolationType: "nearest" uses the grid directly; others interpolate with scipy's griddata
 
         Returns:
            image of shape (height, width, ...), extent for imshow in [um]
@@ -764,9 +711,6 @@ class EBSD:  # pylint: disable=too-many-public-methods
         xAxis              = xLo + (np.arange(widthPixel)+0.5)*(xHi-xLo)/widthPixel
         yAxis              = yLo + (np.arange(heightPixel)+0.5)*(yHi-yLo)/heightPixel
         extent             = (xLo, xHi, yHi, yLo)
-        if interpolationType != 'nearest':
-            x, y = np.meshgrid(xAxis, yAxis)
-            return griddata(np.vstack((xVisible, yVisible)).T, values[self.vMask], (x, y), interpolationType), extent
         if self.vMaskEvery > 1:  # preview: pixels sample only every k-th row and column
             xBlock, yBlock = self.stepSizeX*self.vMaskEvery, self.stepSizeY*self.vMaskEvery
             xAxis          = xLo + (np.floor((xAxis-xLo)/xBlock)+0.5)*xBlock

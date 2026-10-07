@@ -26,10 +26,8 @@ class Orientation:
            symmetry: lattice name, e.g. "cubic"; '' means not identified
         """
         if random:                                                     # produce random orientation
-            if isinstance(random, bool):
-                self.quaternion = Rotation.random()
-            else:
-                self.quaternion = Rotation.random(random_state=random)  # pylint: disable=unexpected-keyword-arg
+            seed = None if random is True else random
+            self.quaternion = Rotation.random(random_state=seed)  # pylint: disable=unexpected-keyword-arg
         elif isinstance(eulers, np.ndarray) and eulers.shape == (3,):  # based on given Euler angles
             self.quaternion = Rotation.from_euler('ZXZ', eulers)
         elif isinstance(matrix, np.ndarray):                           # based on given rotation matrix
@@ -41,12 +39,8 @@ class Orientation:
         self.symmetry = Symmetry(symmetry)
         self.plot2D = 'right-down'
         self.eps = 1e-6
-        return
 
 
-    ##
-    # @name PLOTTING, PRINTING
-    # @{
     def plot(self, poles: Any = None, unitCell: bool = True, cos: bool = True, annotate: bool = False,
              plot2D: str = '', scale: float = 2, fileName: str = '') -> None:
         """Plot rotated unit-cell in 3D, and possibly the pole-figure and specific poles
@@ -96,10 +90,9 @@ class Orientation:
                 ax.plot(scale*np.cos(np.linspace(0., 2.*np.pi, 100)),
                         scale*np.sin(np.linspace(0., 2.*np.pi, 100)), 'k--')
             # plot poles
-            oHelp = Orientation(eulers=np.array([0., 0., 0.]), symmetry=self.symmetry.lattice)
             poles = np.array(poles, dtype=float)
             poles /= np.linalg.norm(poles)
-            for _, q in enumerate(oHelp.symmetry.equivalentQuaternions(oHelp.quaternion)):
+            for q in self.symmetry.equivalentQuaternions(Rotation.identity()):
                 conjAxis = q.apply(poles)  # e.g. [100]
                 direction = quaternion.apply(conjAxis)
                 if direction[2] < -self.eps:
@@ -129,7 +122,6 @@ class Orientation:
             ax.set_zlabel('')
             ax.set_zticks([])
         showOrSave(fileName)
-        return
 
 
     def plotUnit(self, ax: Any, xlabel: str, ylabel: str, zlabel: str, x: float = 0, y: float = 0,
@@ -158,7 +150,6 @@ class Orientation:
             ax.text(*(self.project(*([x, y, z] + axes[0]))+(xlabel,)))
             ax.text(*(self.project(*([x+0.1, y, z] + axes[1]))+(ylabel, {'ha': 'right'})))
             ax.text(*(self.project(*([x+0.1, y, z] + axes[2]))+(zlabel,)))
-        return
 
 
     def plotLine(self, ax: Any, start: Any, delta: Any, color: str = 'k', lw: float = 1, ls: str = 'solid',
@@ -191,7 +182,6 @@ class Orientation:
                                 [start[1]]+[start[1]+delta[1]],
                                 [start[2]]+[start[2]+delta[2]])
             ax.plot(x, y,  color=color, lw=lw, marker=marker, ls=ls, markersize=markerSize)
-        return
 
 
     def project(self, x: Any, y: Any, z: Any) -> tuple[np.ndarray, ...]:
@@ -236,27 +226,18 @@ class Orientation:
                 angles = asBungeEulers(q, degrees=True)
                 angles[angles < 0] += 360.
                 print(f'   [{angles[0]:5.1f}  {angles[1]:5.1f}  {angles[2]:5.1f}]')
-        return
-
-    # @}
 
 
-    # @name CONVENTIONAL ROUTINES
-    # @{
-    def asEulers(self, notation: str = 'bunge', degrees: bool = False, standardRange: bool = False
-                 ) -> np.ndarray:
-        """Return this orientation's Euler angles in the requested convention.
+    def asEulers(self, degrees: bool = False, standardRange: bool = False) -> np.ndarray:
+        """Return this orientation's Bunge (intrinsic ZXZ) Euler angles.
 
         Args:
-           notation: only "bunge" (intrinsic ZXZ) is supported
            degrees: return degrees instead of radians
            standardRange: map phi1 and phi2 into [0, 2pi)
 
         Returns:
            Euler angles (phi1, Phi, phi2)
         """
-        if notation.lower() not in ('bunge', 'zxz'):
-            raise ValueError('Only the Bunge/intrinsic ZXZ convention is supported')
         return asBungeEulers(self.quaternion, degrees, standardRange)
 
 
@@ -313,12 +294,7 @@ class Orientation:
         me = next((q for q in equivalents if self.symmetry.inFZ(q)), equivalents[-1])
         return Orientation(quaternion=me, symmetry=self.symmetry.lattice)
 
-    # @}
 
-
-    ##
-    # @name MATERIAL SPECIFIC ROUTINES
-    # @{
     def disorientation(self, other: 'Orientation', sst: bool = True) -> tuple['Orientation', int, int, bool]:
         """Disorientation between myself and given other orientation.
 
@@ -424,22 +400,6 @@ class Orientation:
         return Orientation(quaternion=mean,
                            symmetry=reference.symmetry.lattice)
 
-    # @}
-
-
-    eulers = property(asEulers)
-    matrix = property(asMatrix)
-    infz = property(inFZ)
-
-
-    def __copy__(self) -> 'Orientation':
-        """Return a copy with the same rotation and symmetry.
-
-        Returns:
-           new orientation
-        """
-        return self.__class__(quaternion=self.quaternion, symmetry=self.symmetry.lattice)
-
 
     def __repr__(self) -> str:
         """Return symmetry, quaternion, matrix and Euler angles as text.
@@ -448,7 +408,7 @@ class Orientation:
            multi-line description
         """
         matrix = '\n'.join('\t'.join(map(str, self.asMatrix()[i, :])) for i in range(3))
-        eulers = '\t'.join(map(str, self.asEulers('bunge', degrees=True)))
+        eulers = '\t'.join(map(str, self.asEulers(degrees=True)))
         return (f'Symmetry: {self.symmetry}\n'
                 f'Quaternion: {self.quaternion}\n'
                 f'Matrix:\n{matrix}\n'
