@@ -43,7 +43,7 @@ Features
 
    verification
    comparison
-   comparisonOrix
+   comparisonLibraries
 
 .. toctree::
    :maxdepth: 1

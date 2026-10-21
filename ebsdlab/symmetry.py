@@ -442,6 +442,43 @@ class Symmetry:
         return inSST
 
 
+    def foldIntoSST(self, vectors: np.ndarray) -> np.ndarray:
+        """Map directions onto their symmetry-equivalent direction in the standard triangle.
+
+        Same result as trying all symmetryQuats() with inSST(proper=False), which includes inversion, but without
+        the loop: the Laue group is applied directly by sign changes, sorting and an azimuthal fold.
+
+        Args:
+           vectors: directions (3, n)
+
+        Returns:
+           folded directions (3, n)
+        """
+        x, y, z = np.array(vectors, dtype=float)
+        if self.lattice == 'cubic':  # 0 <= y <= x <= z
+            y, x, z = np.sort(np.abs([x, y, z]), axis=0)
+        elif self.lattice == 'tetragonal':  # 0 <= y <= x, z >= 0
+            x, y = np.abs(x), np.abs(y)
+            x, y, z = np.maximum(x, y), np.minimum(x, y), np.abs(z)
+        elif self.lattice == 'orthorhombic':
+            x, y, z = np.abs(x), np.abs(y), np.abs(z)
+        elif self.lattice == 'monoclinic':  # 2-fold axis along y: (-x, y, -z), mirror (x, -y, z)
+            z = np.where(x < 0, -z, z)
+            x, y = np.abs(x), np.abs(y)
+        elif self.lattice == 'triclinic':
+            x, y, z = np.where(z < 0, [-x, -y, -z], [x, y, z])
+        elif self.lattice in ('hexagonal', 'trigonal'):
+            # inversion into the upper hemisphere, then rotations and mirrors fold the azimuth into the wedge
+            # [offset, offset + period/2]: hexagonal 0-30°, trigonal 30-90°
+            period, offset = (np.pi/3, 0.) if self.lattice == 'hexagonal' else (2*np.pi/3, np.pi/6)
+            x, y, z = np.where(z < 0, [-x, -y, -z], [x, y, z])
+            azimuth = np.mod(np.arctan2(y, x) - offset, period)
+            azimuth = np.minimum(azimuth, period - azimuth) + offset
+            radius = np.hypot(x, y)
+            x, y = radius*np.cos(azimuth), radius*np.sin(azimuth)
+        return np.array([x, y, z])
+
+
     def xyToHKL(self, inPlane: Any) -> np.ndarray | None:
         """Convert cubic stereographic-plane coordinates to HKL vectors.
 

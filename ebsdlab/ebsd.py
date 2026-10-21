@@ -181,17 +181,11 @@ class EBSD:  # pylint: disable=too-many-public-methods
             points = shown[self.phaseID[shown] == phase]
             if not sym.lattice or not points.size:
                 continue
-            flags = np.zeros(len(points), dtype=bool)
-            rgbsPhase = np.zeros((3, len(points)), dtype=float)
             # pole of the equivalent orientation q*s: (q*s)^-1 axis = s^-1 (q^-1 axis), so q^-1 axis is computed once
             poles = self.quaternions[points].inv().apply(axis).T
-            for symmetry in sym.symmetryQuats():
-                pole = symmetry.inv().as_matrix() @ poles[:, ~flags]
-                remainingFlags, remainingRgbs = sym.inSST(pole, color=True, proper=False)
-                if len(remainingRgbs.shape) == 2:
-                    rgbsPhase[:, ~flags] = remainingRgbs
-                    flags[~flags]        = remainingFlags
-            rgbs[:, points] = rgbsPhase
+            _, rgbsPhase = sym.inSST(sym.foldIntoSST(poles), color=True, proper=False)
+            if rgbsPhase.ndim == 2:
+                rgbs[:, points] = rgbsPhase
         fig = self.plotRGB(rgbs, widthPixel)
         showOrSave(fileName, show)
         return fig

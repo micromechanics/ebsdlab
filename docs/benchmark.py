@@ -1,18 +1,22 @@
-"""Resource comparison of ebsdlab, orix and MTEX for Python for docs/source/comparisonOrix.rst.
+"""Resource comparison of ebsdlab, orix and MTEX for Python for docs/source/comparisonLibraries.rst.
 
 Each package runs in its own virtual environment and every measurement in a fresh process, so imports and peak
-memory do not mix. Usage:
+memory do not mix. Each file runs twice per package, sharing an empty numba cache (NUMBA_CACHE_DIR): where numba
+compiles, the first run includes the compilation, as after an installation, and the times read "first / second".
+Usage:
 
     python docs/benchmark.py EBSDLAB_VENV ORIX_VENV MTEX_VENV FILE [FILE ...]
 
 EBSDLAB_VENV holds only `pip install .`, ORIX_VENV only `pip install orix`, MTEX_VENV only
 `pip install "mtex[numba,plot,io]"`. A one-time comparison: the results,
-with versions and date, are in docs/source/comparisonOrix.rst; the data files are not part of the repository.
+with versions and date, are in docs/source/comparisonLibraries.rst; the data files are not part of the repository.
 """
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 
 def worker(package: str, fileName: str) -> None:
@@ -95,12 +99,21 @@ def main() -> None:
     for fileName in sys.argv[4:]:
         print(f'\n{Path(fileName).name}, {Path(fileName).stat().st_size/1024**2:.0f} MB on disk')
         for package, venv in venvs.items():
-            output = subprocess.run([venv/'bin'/'python', __file__, '--worker', package, fileName],
-                                    capture_output=True, text=True, check=True).stdout
-            result = json.loads(output.strip().splitlines()[-1])
-            plot = 'not possible' if result['plot'] is None else f"{result['plot']:5.1f} s"
-            print(f"  {package:8s} {result['points']:>9,d} points  load {result['load']:6.1f} s  "
-                  f"IPF map {plot}  peak memory {result['rssPeak']:6.0f} MB "
+            with TemporaryDirectory() as cache:
+                runs = [json.loads(subprocess.run([venv/'bin'/'python', __file__, '--worker', package, fileName],
+                                                  capture_output=True, text=True, check=True,
+                                                  env=os.environ | {'NUMBA_CACHE_DIR': cache}
+                                                  ).stdout.strip().splitlines()[-1]) for _ in range(2)]
+                compiled = any(Path(cache).iterdir())
+            result = runs[-1]
+
+            def times(key: str) -> str:
+                """Time of the second run, preceded by the first one where numba compiled."""
+                if result[key] is None:
+                    return 'not possible'
+                return (f'{runs[0][key]:.1f} / ' if compiled else '') + f'{result[key]:.1f} s'
+            print(f"  {package:8s} {result['points']:>9,d} points  load {times('load')}  "
+                  f"IPF map {times('plot')}  peak memory {result['rssPeak']:6.0f} MB "
                   f"(after imports {result['rssImport']:4.0f} MB)  loaded data {result['data']:6.1f} MB")
 
 
