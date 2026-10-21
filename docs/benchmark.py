@@ -1,11 +1,12 @@
-"""Resource comparison of ebsdlab and orix for docs/source/comparisonOrix.rst.
+"""Resource comparison of ebsdlab, orix and MTEX for Python for docs/source/comparisonOrix.rst.
 
 Each package runs in its own virtual environment and every measurement in a fresh process, so imports and peak
 memory do not mix. Usage:
 
-    python docs/benchmark_orix.py EBSDLAB_VENV ORIX_VENV FILE [FILE ...]
+    python docs/benchmark.py EBSDLAB_VENV ORIX_VENV MTEX_VENV FILE [FILE ...]
 
-EBSDLAB_VENV holds only `pip install .`, ORIX_VENV only `pip install orix`. A one-time comparison: the results,
+EBSDLAB_VENV holds only `pip install .`, ORIX_VENV only `pip install orix`, MTEX_VENV only
+`pip install "mtex[numba,plot,io]"`. A one-time comparison: the results,
 with versions and date, are in docs/source/comparisonOrix.rst; the data files are not part of the repository.
 """
 import json
@@ -41,6 +42,8 @@ def worker(package: str, fileName: str) -> None:
 
     if package == 'ebsdlab':
         from ebsdlab.ebsd import EBSD  # pylint: disable=import-outside-toplevel
+    elif package == 'mtex':
+        import mtex  # pylint: disable=import-outside-toplevel
     else:
         from orix import io  # pylint: disable=import-outside-toplevel
         from orix.plot import IPFColorKeyTSL  # pylint: disable=import-outside-toplevel
@@ -49,6 +52,8 @@ def worker(package: str, fileName: str) -> None:
     start = time.perf_counter()
     if package == 'ebsdlab':
         data = EBSD(fileName)
+    elif package == 'mtex':
+        data = mtex.loadEBSD(fileName)
     else:
         data = io.load(fileName)
     timeLoad = time.perf_counter()-start
@@ -57,6 +62,13 @@ def worker(package: str, fileName: str) -> None:
     try:
         if package == 'ebsdlab':
             data.plotIPF('ND', show=False)
+        elif package == 'mtex':
+            rgb = np.full(data.shape+(3,), np.nan)
+            for phaseID in data.indexedPhaseId:
+                phase = data[data.mineralList[phaseID]]
+                key = mtex.ipfTSLKey(phase.CS, ipfDirection=mtex.vector3d.Z)
+                rgb[data.phaseId == phaseID] = key.orientation2color(phase.orientations)
+            mtex.plot(data, rgb)
         else:
             rgb = np.zeros((data.size, 3))
             for phaseID, phase in data.phases_in_data:
@@ -67,19 +79,20 @@ def worker(package: str, fileName: str) -> None:
         timePlot = time.perf_counter()-start
     except IndexError:  # orix maps need a square grid; hex grids fail in CrystalMap.get_map_data
         pass
-    print(json.dumps({'points': int(data.nPoints if package == 'ebsdlab' else data.size),
+    points = data.nPoints if package == 'ebsdlab' else (~data.isPadding).sum() if package == 'mtex' else data.size
+    print(json.dumps({'points': int(points),
                       'load': timeLoad, 'plot': timePlot, 'rssImport': rssImport,
                       'rssPeak': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024,
                       'data': nbytes(data)/1024**2}))
 
 
 def main() -> None:
-    """Run the workers in both environments and print a reStructuredText table."""
-    venvs = {'ebsdlab': Path(sys.argv[1]), 'orix': Path(sys.argv[2])}
+    """Run the workers in all environments and print the results."""
+    venvs = {'ebsdlab': Path(sys.argv[1]), 'orix': Path(sys.argv[2]), 'mtex': Path(sys.argv[3])}
     for package, venv in venvs.items():
         size = sum(f.stat().st_size for f in venv.rglob('*') if f.is_file() and not f.is_symlink())
         print(f'{package} venv: {size/1024**3:.2f} GB')
-    for fileName in sys.argv[3:]:
+    for fileName in sys.argv[4:]:
         print(f'\n{Path(fileName).name}, {Path(fileName).stat().st_size/1024**2:.0f} MB on disk')
         for package, venv in venvs.items():
             output = subprocess.run([venv/'bin'/'python', __file__, '--worker', package, fileName],

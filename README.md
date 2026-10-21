@@ -118,3 +118,4 @@ also be documented in this repository when they need to stay alongside the code.
 
 ## Notes
 - Test more and then release version
+- Add mTex for python pip-mtex into the orix comparison
