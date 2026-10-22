@@ -7,8 +7,7 @@ Comparison with orix and MTEX
 
 `orix <https://orix.readthedocs.io>`_ is a Python library for crystal orientation analysis;
 `MTEX for Python <https://mtex-toolbox.github.io>`_ (``pip install mtex``) is the Python version of the MATLAB
-texture toolbox MTEX. This page compares them with ebsdlab, so users can choose the right tool. The details refer
-to orix 0.15.0 and MTEX for Python 1.0.0.
+texture toolbox. This page compares orix 0.15.0 and MTEX for Python 1.0.0 with ebsdlab.
 
 Features
 --------
@@ -59,76 +58,30 @@ Features
      - 41
      - 4, or 16 with the numba, plot and io extras
 
-Choose ebsdlab for large maps on little memory, hexagonal scans and quick looks: imported Euler angles and scalar
-data are stored as ``float16`` (EBSD indexing accuracy, about 0.1°, does not benefit from higher precision), maps are
-drawn directly from the scan grid without interpolation, and the virtual mask (``vMask``) crops the view or gives
-coarse previews. Its small code base with Bunge Euler angles only is easy to read and suits teaching, and its
-results are compared against OIM and MTEX (:ref:`verification`).
-
-Choose orix for its data model: Quaternion, Rotation, Orientation and Misorientation classes, Miller indices and zone
-axes, vectorized operations on arrays of any shape, and all point groups and space groups. A ``CrystalMap`` keeps a
-phase list with names, colors and crystal structures; some computations run lazily with dask.
-
-Choose MTEX for Python for the widest analysis: grains and boundaries, ODFs and texture characteristics, parent grain
-reconstruction, all with the names, syntax and documentation of MATLAB MTEX. Once numba has compiled its functions
-it is the fastest of the three; the first run after an installation is the slowest.
+- **ebsdlab**: large maps on little memory, hexagonal scans and quick looks.
+- **orix**: a rich data model (quaternions, rotations, orientations, misorientations), all point and space groups.
+- **MTEX for Python**: the widest analysis (grains, boundaries, ODFs, parent grains), with the syntax of MATLAB MTEX.
 
 
 Resource usage
 --------------
 
-A one-time comparison on 2026-10-21, ebsdlab 0.0.9, orix 0.15.0 and MTEX for Python 1.0.0 (``mtex[numba,plot,io]``),
-all with Python 3.14.4, numpy 2.5.4, scipy 1.18.1 and matplotlib 3.11.2, on a laptop with an AMD Ryzen 5 3500U and
-14 GB memory. Each package is installed alone in a fresh virtual environment, and each measurement runs in a new
-process: load the ``.ang`` file, then plot the IPF map along Z, with orix and MTEX in the TSL color key. orix and
-MTEX compile numba functions on first use and cache them; their times read "first run / later runs", the first run
-starting from an empty numba cache as after an installation. Three repetitions agree within 0.2 s. Peak memory is
-the peak resident memory of the process, including the imports; loaded data is the size of all arrays of the loaded
-map. The script is ``docs/benchmark.py``.
+Each package loads an ``.ang`` file with 1.6 million points and plots its IPF map along Z.
 
-The file is ``EBSD_deformed_I_ED.ang`` of Maj et al. (Zenodo 18668585, 190 MB), 1,593,848 points. Its hexagonal
-grid is made rectangular for the comparison, because orix cannot plot hexagonal grids: every second row is shifted
-by half a step and the last point of the other rows is dropped. The map is then distorted, but all packages
-handle the same numbers.
+.. image:: _static/benchmark_results.png
+   :width: 100%
 
-.. list-table::
-   :header-rows: 1
+Once numba has compiled, MTEX is the fastest; on the first run after an installation, the compilation makes it the
+slowest. ebsdlab needs no compilation, the least RAM (half of orix, 60 % of MTEX) and the least disk space: it stores the
+map as ``float16`` and folds each pole directly into the standard triangle.
 
-   * -
-     - ebsdlab
-     - orix
-     - MTEX
-   * - load
-     - 2.7 s
-     - 3.0 / 3.0 s
-     - 5.2 / 1.3 s
-   * - IPF map
-     - 1.0 s
-     - 4.1 / 4.0 s
-     - 5.1 / 0.7 s
-   * - peak memory
-     - 569 MB
-     - 1235 MB
-     - 916 MB
-   * - memory after the imports
-     - 102 MB
-     - 244 MB
-     - 106 MB
-   * - loaded data
-     - 96 MB
-     - 198 MB
-     - 196 MB
-   * - virtual environment on disk
-     - 0.30 GB
-     - 0.59 GB
-     - 0.54 GB
-
-Once compiled, MTEX is the fastest: its numba parser reads the text file in half the time of ``np.loadtxt``, which
-ebsdlab and orix use. On the first run after an installation, the compilation makes MTEX the slowest, 10 s for loading
-and plotting together. orix compiles little. ebsdlab needs no compilation, the least memory (about 60 % of MTEX and
-half of orix) and the least disk space: the loaded map is stored as ``float16``, and each pole is folded directly into
-the standard triangle and colored once. On the original hexagonal file (1,594,445 points), which orix loads but cannot
-plot, ebsdlab and MTEX take as long as on the rectangular one.
+Details: measured on 2026-10-21 with ebsdlab 1.0, orix 0.15.0 and MTEX for Python 1.0.0 (``mtex[numba,plot,io]``),
+Python 3.14.4, numpy 2.5.4, scipy 1.18.1 and matplotlib 3.11.2, on a laptop (AMD Ryzen 5 3500U, 14 GB). Each package
+has its own virtual environment and each measurement its own process; the first run starts from an empty numba
+cache, and three repetitions agree within 0.2 s. orix and MTEX use the TSL color key. Peak RAM includes the imports;
+the RAM of the loaded map is the size of all its arrays. The file is ``EBSD_deformed_I_ED.ang`` of Maj et al. (Zenodo
+18668585, 190 MB). orix cannot plot hexagonal grids, so every second row is shifted by half a step to make the grid
+rectangular; on the original hexagonal file, ebsdlab and MTEX are as fast.
 
 
 Dependencies
