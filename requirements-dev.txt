@@ -212,7 +212,7 @@ pygments==2.20.0
     #   pytest
     #   sphinx
     #   sphinx-tabs
-pylint==4.0.6
+pylint==4.0.9
     # via ebsdlab (setup.cfg)
 pyparsing==3.3.2
     # via matplotlib
