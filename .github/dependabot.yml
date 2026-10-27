@@ -1,16 +1,20 @@
 version: 2
-updates:
-  - package-ecosystem: pip
-    directory: /
+multi-ecosystem-groups:
+  all:
     schedule:
       interval: monthly
     assignees: [SteffenBrinckmann]
+
+updates:
+  - package-ecosystem: pip
+    directory: /
+    patterns: ['*']
+    multi-ecosystem-group: all
     ignore:
       - dependency-name: PySide6
         versions: ['>=6.11']
 
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
-    assignees: [SteffenBrinckmann]
+    patterns: ['*']
+    multi-ecosystem-group: all

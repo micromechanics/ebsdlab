@@ -6,9 +6,9 @@
 #
 alabaster==1.0.0
     # via sphinx
-ast-serialize==0.7.0
+ast-serialize==0.13.1
     # via mypy
-astroid==4.0.4
+astroid==4.3.4
     # via pylint
 asttokens==3.0.2
     # via stack-data
@@ -22,72 +22,72 @@ beautifulsoup4==4.15.0
     # via nbconvert
 bleach[css]==6.4.0
     # via nbconvert
-build==1.5.0
+build==1.6.1
     # via pip-tools
-certifi==2026.7.22
+certifi==2026.10.23
     # via requests
 cfgv==3.5.0
     # via pre-commit
-charset-normalizer==3.4.9
+charset-normalizer==3.5.2
     # via requests
-click==8.4.2
+click==8.5.0
     # via pip-tools
 comm==0.2.3
     # via
     #   ipykernel
     #   ipywidgets
-contourpy==1.3.3
+contourpy==1.4.0
     # via matplotlib
 cycler==0.12.1
     # via matplotlib
-debugpy==1.8.21
+debugpy==1.8.22
     # via ipykernel
 defusedxml==0.7.1
     # via nbconvert
 dill==0.4.1
     # via pylint
-distlib==0.4.3
+distlib==0.4.4
     # via virtualenv
-docutils==0.22.4
+docutils==0.23
     # via
     #   sphinx
     #   sphinx-tabs
-executing==2.2.1
+executing==2.3.0
     # via stack-data
-fastjsonschema==2.22.1
+fastjsonschema==2.22.2
     # via nbformat
-filelock==3.32.2
+filelock==4.2.4
     # via
     #   python-discovery
     #   virtualenv
-fonttools==4.63.0
+fonttools==4.68.0
     # via matplotlib
 h5py==3.16.0
     # via ebsdlab (setup.cfg)
-identify==2.6.19
+identify==2.6.20
     # via pre-commit
-idna==3.18
+idna==3.20
     # via requests
-imagesize==2.0.0
+imagesize==2.0.1
     # via sphinx
-iniconfig==2.3.0
+iniconfig==2.3.1
     # via pytest
-ipykernel==7.3.0
+ipykernel==7.4.0
     # via jupyter-sphinx
-ipython==9.16.1
+ipython==9.17.1
     # via
     #   ipykernel
     #   ipywidgets
     #   jupyter-sphinx
 ipython-pygments-lexers==1.1.1
     # via ipython
-ipywidgets==8.1.8
+ipywidgets==8.1.9
     # via jupyter-sphinx
-isort==8.0.1
+isort==9.0.2
     # via
     #   ebsdlab (setup.cfg)
     #   pylint
-jedi==0.20.0
+jedi==0.20.1
     # via ipython
 jinja2==3.1.6
     # via
@@ -98,7 +98,7 @@ jsonschema==4.26.0
     # via nbformat
 jsonschema-specifications==2025.9.1
     # via jsonschema
-jupyter-client==8.9.1
+jupyter-client==8.10.0
     # via
     #   ipykernel
     #   nbclient
@@ -113,17 +113,17 @@ jupyter-sphinx==0.5.3
     # via ebsdlab (setup.cfg)
 jupyterlab-pygments==0.3.0
     # via nbconvert
-jupyterlab-widgets==3.0.16
+jupyterlab-widgets==3.0.17
     # via ipywidgets
-kiwisolver==1.5.0
+kiwisolver==1.5.1
     # via matplotlib
-librt==0.14.0
+librt==0.16.0
     # via mypy
-markupsafe==3.0.3
+markupsafe==3.0.4
     # via
     #   jinja2
     #   nbconvert
-matplotlib==3.11.1
+matplotlib==3.11.2
     # via
     #   ebsdlab (setup.cfg)
     #   pytest-mpl
@@ -133,26 +133,28 @@ matplotlib-inline==0.2.2
     #   ipython
 mccabe==0.7.0
     # via pylint
-mistune==3.3.4
+mistune==3.4.0
     # via nbconvert
-mypy==2.3.0
+mypy==2.4.0
     # via ebsdlab (setup.cfg)
 mypy-extensions==1.1.0
-    # via mypy
+    # via
+    #   isort
+    #   mypy
 nbclient==0.11.0
     # via nbconvert
-nbconvert==7.17.1
+nbconvert==7.17.2
     # via jupyter-sphinx
-nbformat==5.11.0
+nbformat==5.11.1
     # via
     #   jupyter-sphinx
     #   nbclient
     #   nbconvert
-nest-asyncio2==1.7.2
+nest-asyncio2==1.7.4
     # via ipykernel
-nodeenv==1.10.0
+nodeenv==1.11.0
     # via pre-commit
-numpy==2.5.1
+numpy==2.5.4
     # via
     #   contourpy
     #   ebsdlab (setup.cfg)
@@ -168,6 +170,7 @@ packaging==26.3
     #   pytest
     #   pytest-mpl
     #   sphinx
+    #   virtualenv
     #   wheel
 pandocfilters==1.5.1
     # via nbconvert
@@ -179,32 +182,30 @@ pexpect==4.9.0
     # via ipython
 piccolo-theme==0.24.0
     # via ebsdlab (setup.cfg)
-pillow==12.3.0
+pillow==13.0.0
     # via
     #   matplotlib
     #   pytest-mpl
-pip-tools==7.6.0
+pip-tools==7.6.2
     # via ebsdlab (setup.cfg)
-platformdirs==4.11.0
+platformdirs==4.13.6
     # via
     #   jupyter-core
     #   pylint
     #   virtualenv
-pluggy==1.6.0
+pluggy==1.7.0
     # via pytest
-pre-commit==4.6.1
+pre-commit==4.7.0
     # via ebsdlab (setup.cfg)
 prompt-toolkit==3.0.53
     # via ipython
 psutil==7.2.2
-    # via
-    #   ipykernel
-    #   ipython
+    # via ipython
 ptyprocess==0.7.0
     # via pexpect
-pure-eval==0.2.3
+pure-eval==0.2.4
     # via stack-data
-pygments==2.20.0
+pygments==2.21.0
     # via
     #   ipython
     #   ipython-pygments-lexers
@@ -212,11 +213,11 @@ pygments==2.20.0
     #   pytest
     #   sphinx
     #   sphinx-tabs
-pylint==4.0.6
+pylint==4.1.3
     # via ebsdlab (setup.cfg)
-pyparsing==3.3.2
+pyparsing==3.3.3
     # via matplotlib
-pyproject-hooks==1.2.0
+pyproject-hooks==1.3.3
     # via
     #   build
     #   pip-tools
@@ -226,15 +227,15 @@ pytest==9.1.1
     #   pytest-mpl
 pytest-mpl==0.19.0
     # via ebsdlab (setup.cfg)
-python-dateutil==2.9.0.post0
+python-dateutil==3.0.0
     # via
     #   jupyter-client
     #   matplotlib
-python-discovery==1.5.1
+python-discovery==1.6.5
     # via virtualenv
 pyyaml==6.0.3
     # via pre-commit
-pyzmq==27.1.0
+pyzmq==27.2.0
     # via
     #   ipykernel
     #   jupyter-client
@@ -246,19 +247,19 @@ requests==2.34.2
     # via sphinx
 roman-numerals==4.1.0
     # via sphinx
-rpds-py==2026.6.3
+rpds-py==2026.9.1
     # via
     #   jsonschema
     #   referencing
-scipy==1.18.0
+scipy==1.18.1
     # via ebsdlab (setup.cfg)
 six==1.17.0
     # via python-dateutil
 snowballstemmer==3.1.1
     # via sphinx
-soupsieve==2.9.1
+soupsieve==3.0.4
     # via beautifulsoup4
-sphinx==9.1.0
+sphinx==9.2.0
     # via
     #   ebsdlab (setup.cfg)
     #   jupyter-sphinx
@@ -272,7 +273,7 @@ sphinxcontrib-devhelp==2.0.0
     # via sphinx
 sphinxcontrib-htmlhelp==2.1.0
     # via sphinx
-sphinxcontrib-jsmath==1.0.1
+sphinxcontrib-jsmath==2.0.0
     # via sphinx
 sphinxcontrib-qthelp==2.0.0
     # via sphinx
@@ -282,9 +283,9 @@ stack-data==0.6.3
     # via ipython
 tinycss2==1.5.1
     # via bleach
-tomlkit==0.15.1
+tomlkit==0.15.2
     # via pylint
-tornado==6.5.7
+tornado==6.6
     # via
     #   ipykernel
     #   jupyter-client
@@ -304,19 +305,21 @@ typing-extensions==4.16.0
     #   beautifulsoup4
     #   jupyter-client
     #   mypy
-urllib3==2.7.0
+tzdata==2026.5
+    # via python-dateutil
+urllib3==2.8.0
     # via requests
-virtualenv==21.7.1
+virtualenv==21.15.0
     # via pre-commit
-wcwidth==0.8.2
+wcwidth==0.9.4
     # via prompt-toolkit
-webencodings==0.5.1
+webencodings==0.6.1
     # via
     #   bleach
     #   tinycss2
-wheel==0.47.0
+wheel==0.48.0
     # via pip-tools
-widgetsnbextension==4.0.15
+widgetsnbextension==4.0.16
     # via ipywidgets
 
 # The following packages are considered to be unsafe in a requirements file:
