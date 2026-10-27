@@ -119,7 +119,7 @@ kiwisolver==1.5.0
     # via matplotlib
 librt==0.14.0
     # via mypy
-markupsafe==3.0.3
+markupsafe==3.0.4
     # via
     #   jinja2
     #   nbconvert
