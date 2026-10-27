@@ -179,7 +179,7 @@ pexpect==4.9.0
     # via ipython
 piccolo-theme==0.24.0
     # via ebsdlab (setup.cfg)
-pillow==12.3.0
+pillow==13.0.0
     # via
     #   matplotlib
     #   pytest-mpl
