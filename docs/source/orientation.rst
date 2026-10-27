@@ -72,7 +72,7 @@ Procedure:
     1. we know the normal direction hkl = 111
     2. we pick an arbitrary direction (1,-1,0) and verify that it is perpendicular
     3. we normalize the vectors and calculate the third by the cross-product
-    4. we create the rotation matrix by stacking the vectors next to eachother
+    4. we create the rotation matrix by stacking the vectors next to each other
     5. we verify it by plotting and obtain the Euler angles
 
 .. jupyter-execute::

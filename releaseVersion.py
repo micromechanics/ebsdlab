@@ -118,7 +118,7 @@ def newVersion(level: int = 2) -> None:
         for line in fileOld:
             line = line[:-1]  # only remove last char, keeping front part
             if line.startswith(text):
-                line = f"{text}'{version}'"
+                line = f"{text}{version}" if path == 'setup.cfg' else f"{text}'{version}'"
             fileNew.append(line)
         with open(path, 'w', encoding='utf-8') as fOut:
             fOut.write('\n'.join(fileNew)+'\n')
