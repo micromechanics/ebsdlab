@@ -190,7 +190,7 @@ platformdirs==4.11.0
     #   jupyter-core
     #   pylint
     #   virtualenv
-pluggy==1.6.0
+pluggy==1.7.0
     # via pytest
 pre-commit==4.6.1
     # via ebsdlab (setup.cfg)
