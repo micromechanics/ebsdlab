@@ -150,7 +150,7 @@ nbformat==5.11.0
     #   nbconvert
 nest-asyncio2==1.7.2
     # via ipykernel
-nodeenv==1.10.0
+nodeenv==1.11.0
     # via pre-commit
 numpy==2.5.1
     # via
