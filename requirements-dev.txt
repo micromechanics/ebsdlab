@@ -250,7 +250,7 @@ rpds-py==2026.6.3
     # via
     #   jsonschema
     #   referencing
-scipy==1.18.0
+scipy==1.18.1
     # via ebsdlab (setup.cfg)
 six==1.17.0
     # via python-dateutil
