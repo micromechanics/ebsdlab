@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    assignees: [SteffenBrinckmann]
+    ignore:
+      - dependency-name: PySide6
+        versions: ['>=6.11']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    assignees: [SteffenBrinckmann]
