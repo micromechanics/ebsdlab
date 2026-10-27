@@ -148,7 +148,7 @@ nbformat==5.11.0
     #   jupyter-sphinx
     #   nbclient
     #   nbconvert
-nest-asyncio2==1.7.2
+nest-asyncio2==1.7.4
     # via ipykernel
 nodeenv==1.10.0
     # via pre-commit
