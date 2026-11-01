@@ -32,5 +32,5 @@ scipy==1.18.1
     # via ebsdlab (setup.cfg)
 six==1.17.0
     # via python-dateutil
-tzdata==2026.5
+tzdata==2026.6
     # via python-dateutil
