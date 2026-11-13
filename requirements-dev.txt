@@ -285,7 +285,7 @@ tinycss2==1.5.1
     # via bleach
 tomlkit==0.15.2
     # via pylint
-tornado==6.6
+tornado==6.6.1
     # via
     #   ipykernel
     #   jupyter-client
